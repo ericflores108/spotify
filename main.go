@@ -12,6 +12,7 @@ import (
 	"github.com/ericflores108/spotify/config"
 	"github.com/ericflores108/spotify/db"
 	"github.com/ericflores108/spotify/logger"
+	"github.com/ericflores108/spotify/spotify"
 )
 
 func main() {
@@ -52,19 +53,13 @@ func main() {
 
 	for _, user := range users {
 		log.InfoLogger.Printf("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
-	}
 
-	// Populate the Config struct with the retrieved secrets
-	config := auth.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-	}
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, clientID, clientSecret)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to access token: %v", err)
+		}
 
-	_, err = auth.GetSpotifyToken(config)
-
-	if err != nil {
-		log.Error("error getting token")
-		return
+		spotify.GetTopItems(spotify.Artists, accessToken)
 	}
 
 	log.Info("starting server...")
