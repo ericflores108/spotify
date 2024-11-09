@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/firestore"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/ericflores108/spotify/auth"
 	"github.com/ericflores108/spotify/config"
+	"github.com/ericflores108/spotify/db"
 	"github.com/ericflores108/spotify/logger"
 )
 
@@ -18,23 +20,38 @@ func main() {
 
 	// Initialize context and Secret Manager client
 	ctx := context.Background()
-	client, err := secretmanager.NewClient(ctx)
+	secretManagerClient, err := secretmanager.NewClient(ctx)
 	if err != nil {
 		log.Error("failed to create secret manager client")
 	}
-	defer client.Close()
+	defer secretManagerClient.Close()
 
 	// Retrieve the ClientID and ClientSecret secrets
-	clientID, err := auth.GetSecret(ctx, client, config.SpotifyProjectID, config.SpotifyClientID)
+	clientID, err := auth.GetSecret(ctx, secretManagerClient, config.SpotifyProjectID, config.SpotifyClientID)
 	if err != nil {
 		log.InfoLogger.Fatalf("Secret Error: %v", err)
 		return
 	}
 
-	clientSecret, err := auth.GetSecret(ctx, client, config.SpotifyProjectID, config.SpotifySecretID)
+	clientSecret, err := auth.GetSecret(ctx, secretManagerClient, config.SpotifyProjectID, config.SpotifySecretID)
 	if err != nil {
 		log.InfoLogger.Fatalf("Secret Error: %v", err)
 		return
+	}
+
+	firestoreClient, err := firestore.NewClient(ctx, config.SpotifyProjectID)
+	if err != nil {
+		log.ErrorLogger.Fatalf("failed to create Firestore client: %v", err)
+	}
+
+	// Retrieve all users from the SpotifyUser collection
+	users, err := db.GetAllUsers(ctx, firestoreClient)
+	if err != nil {
+		log.ErrorLogger.Fatalf("failed to get users: %v", err)
+	}
+
+	for _, user := range users {
+		log.InfoLogger.Printf("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 	}
 
 	// Populate the Config struct with the retrieved secrets
@@ -49,8 +66,6 @@ func main() {
 		log.Error("error getting token")
 		return
 	}
-
-	log.Info("access token created")
 
 	log.Info("starting server...")
 	http.HandleFunc("/", handler)
