@@ -59,7 +59,12 @@ func main() {
 			log.ErrorLogger.Fatalf("failed to access token: %v", err)
 		}
 
-		spotify.GetTopItems(spotify.Artists, accessToken)
+		spotifyClient := *&spotify.AuthClient{
+			Client:      &http.Client{},
+			AccessToken: accessToken,
+		}
+
+		spotifyClient.GetTopItems("artists")
 	}
 
 	log.Info("starting server...")

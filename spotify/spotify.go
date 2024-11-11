@@ -1,43 +1,37 @@
 package spotify
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 )
 
 const (
-	topURL = "https://api.spotify.com/v1/me/top/"
+	BaseURL = "https://api.spotify.com/v1"
 )
 
-func GetTopItems(top TopType, accessToken string) {
-	req, err := http.NewRequest("GET", topURL+string(top), nil)
+type AuthClient struct {
+	Client      *http.Client
+	AccessToken string
+}
+
+// Get creates and sends an authenticated GET request to the Spotify API at the specified endpoint.
+// It returns the HTTP response or an error if the request fails.
+func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", BaseURL+endpoint, nil)
 	if err != nil {
-		log.Fatalf("Failed to create request: %v", err)
+		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
+	resp, err := a.Client.Do(req)
 	if err != nil {
-		log.Fatalf("Failed to get response: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
+		return nil, err
 	}
 
-	var artistsResponse ArtistsResponse
-	if err := json.Unmarshal(body, &artistsResponse); err != nil {
-		log.Fatalf("Failed to parse JSON: %v", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, fmt.Errorf("request to %s failed with status %d", endpoint, resp.StatusCode)
 	}
 
-	fmt.Println("Top Artists:", artistsResponse.Total)
-	for _, artist := range artistsResponse.Items {
-		fmt.Println(artist.Name)
-	}
+	return resp, err
 }
