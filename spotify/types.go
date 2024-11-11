@@ -1,6 +1,6 @@
 package spotify
 
-type ArtistsResponse struct {
+type TopResponse struct {
 	Href     string   `json:"href"`
 	Limit    int      `json:"limit"`
 	Next     string   `json:"next"`
@@ -112,4 +112,19 @@ type ExternalIDs struct {
 // Restrictions represents restrictions on a track or album.
 type Restrictions struct {
 	Reason string `json:"reason"`
+}
+
+type ArtistResponse struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Genres     []string `json:"genres"`
+	Popularity int      `json:"popularity"`
+	Followers  struct {
+		Total int `json:"total"`
+	} `json:"followers"`
+	Images []struct {
+		URL    string `json:"url"`
+		Height int    `json:"height"`
+		Width  int    `json:"width"`
+	} `json:"images"`
 }

@@ -3,9 +3,9 @@ package spotify
 import "strings"
 
 // generateIDString extracts up to 5 artist IDs from a pointer to ArtistsResponse and creates a comma-separated string.
-func generateIDString(artistsResponse *ArtistsResponse) string {
+func generateIDString(idResponse *TopResponse) string {
 	var ids []string
-	for i, artist := range artistsResponse.Items {
+	for i, artist := range idResponse.Items {
 		if i >= 5 {
 			break
 		}

@@ -47,10 +47,34 @@ func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
 }
 
 func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
+	// Step 1: Get top artists for the user
 	artists, err := a.GetTopItems("artists")
 	if err != nil {
 		log.Panicf("failed to get top artists: %v", err)
 	}
 
-	return a.GetRecommendations(generateIDString(artists), "", "")
+	// Step 2: Use top artists as seeds to get recommendations
+	recommendations, err := a.GetRecommendations(generateIDString(artists), "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recommendations: %w", err)
+	}
+
+	// Step 3: Populate genres for each artist in recommendations
+	for i, track := range recommendations.Tracks {
+		if len(track.Artists) > 0 {
+			// Fetch artist details by ID for the primary artist
+			artistID := track.Artists[0].ID
+			artistDetails, err := a.GetArtist(artistID)
+			if err != nil {
+				log.Printf("Warning: failed to get details for artist %s: %v", artistID, err)
+				continue // Skip this artist if fetching details fails
+			}
+
+			// Populate genres for the primary artist of this track
+			recommendations.Tracks[i].Artists[0].Genres = artistDetails.Genres
+		}
+	}
+
+	// Return the recommendations with populated genres
+	return recommendations, nil
 }
