@@ -1,13 +1,13 @@
 package spotify
 
 type TopResponse struct {
-	Href     string   `json:"href"`
-	Limit    int      `json:"limit"`
-	Next     string   `json:"next"`
-	Offset   int      `json:"offset"`
-	Previous string   `json:"previous"`
-	Total    int      `json:"total"`
-	Items    []Artist `json:"items"`
+	Href     string `json:"href"`
+	Limit    int    `json:"limit"`
+	Next     string `json:"next"`
+	Offset   int    `json:"offset"`
+	Previous string `json:"previous"`
+	Total    int    `json:"total"`
+	Items    []any  `json:"items"`
 }
 
 type Artist struct {
@@ -127,4 +127,14 @@ type ArtistResponse struct {
 		Height int    `json:"height"`
 		Width  int    `json:"width"`
 	} `json:"images"`
+}
+
+type TopTracksResponse struct {
+	Href     string  `json:"href"`
+	Limit    int     `json:"limit"`
+	Next     string  `json:"next"`
+	Offset   int     `json:"offset"`
+	Previous string  `json:"previous"`
+	Total    int     `json:"total"`
+	Items    []Track `json:"items"` // Specifically typed as []Track
 }

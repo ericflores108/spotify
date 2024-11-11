@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/firestore"
@@ -49,7 +50,10 @@ func main() {
 	// Define HTTP route handlers
 	http.HandleFunc("/", helloHandler)
 	http.HandleFunc("/recommendations", func(w http.ResponseWriter, r *http.Request) {
-		storeRecommendationsHandler(w, r, ctx, log, clientID, clientSecret, firestoreClient)
+		storeRecommendationsHandler(w, ctx, log, clientID, clientSecret, firestoreClient)
+	})
+	http.HandleFunc("/topTracks", func(w http.ResponseWriter, r *http.Request) {
+		storeTracksHandler(w, ctx, log, clientID, clientSecret, firestoreClient)
 	})
 
 	// Determine port for HTTP service
@@ -76,7 +80,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // storeRecommendationsHandler retrieves recommendations for each user and stores them in BigQuery
-func storeRecommendationsHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, log *logger.Logger, clientID, clientSecret string, firestoreClient *firestore.Client) {
+func storeRecommendationsHandler(w http.ResponseWriter, ctx context.Context, log *logger.Logger, clientID, clientSecret string, firestoreClient *firestore.Client) {
 	// Retrieve all users from the SpotifyUser collection
 	users, err := db.GetAllUsers(ctx, firestoreClient)
 	if err != nil {
@@ -85,7 +89,7 @@ func storeRecommendationsHandler(w http.ResponseWriter, r *http.Request, ctx con
 		return
 	}
 
-	for _, user := range users {
+	for user := range slices.Values(users) {
 		log.InfoLogger.Printf("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
 		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, clientID, clientSecret)
@@ -125,4 +129,55 @@ func storeRecommendationsHandler(w http.ResponseWriter, r *http.Request, ctx con
 
 	log.Info("Recommendations stored successfully.")
 	fmt.Fprintf(w, "Recommendations stored successfully.")
+}
+
+func storeTracksHandler(w http.ResponseWriter, ctx context.Context, log *logger.Logger, clientID, clientSecret string, firestoreClient *firestore.Client) {
+	// Retrieve all users from the SpotifyUser collection
+	users, err := db.GetAllUsers(ctx, firestoreClient)
+	if err != nil {
+		log.ErrorLogger.Fatalf("failed to get users: %v", err)
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	for user := range slices.Values(users) {
+		log.InfoLogger.Printf("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
+
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, clientID, clientSecret)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to access token: %v", err)
+			http.Error(w, "Failed to get access token", http.StatusInternalServerError)
+			return
+		}
+
+		spotifyClient := &spotify.AuthClient{
+			Client:      &http.Client{},
+			AccessToken: accessToken,
+		}
+
+		topTracks, err := spotifyClient.TopTracks()
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to get recommendations: %v", err)
+			http.Error(w, "Failed to get recommendations", http.StatusInternalServerError)
+			return
+		}
+
+		bqClient, err := bigquery.NewClient(ctx, config.SpotifyProjectID)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to create BigQuery client: %v", err)
+			http.Error(w, "Failed to create BigQuery client", http.StatusInternalServerError)
+			return
+		}
+		defer bqClient.Close()
+
+		err = db.StoreTopTracks(ctx, bqClient, user.ID, topTracks)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to store top tracks: %v", err)
+			http.Error(w, "Failed to store top tracks", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Info("Tracks stored successfully.")
+	fmt.Fprintf(w, "Tracks stored successfully.")
 }

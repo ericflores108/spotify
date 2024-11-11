@@ -1,10 +1,12 @@
 package spotify
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"slices"
 )
 
 const (
@@ -48,13 +50,28 @@ func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
 
 func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 	// Step 1: Get top artists for the user
-	artists, err := a.GetTopItems("artists")
+	topArtistsRes, err := a.GetTopItems(Artists)
 	if err != nil {
 		log.Panicf("failed to get top artists: %v", err)
 	}
 
+	var artistIDs []string
+	for artist := range slices.Values(topArtistsRes.Items) {
+		// Check if item is a map and contains an "id" key
+		if artistMap, ok := artist.(map[string]any); ok {
+			// Attempt to get the "id" value as a string
+			if id, exists := artistMap["id"].(string); exists {
+				artistIDs = append(artistIDs, id)
+			} else {
+				log.Printf("ID not found or is not a string in item: %v", artistMap)
+			}
+		} else {
+			log.Printf("Item is not a map['id']any: %v", artist)
+		}
+	}
+
 	// Step 2: Use top artists as seeds to get recommendations
-	recommendations, err := a.GetRecommendations(generateIDString(artists), "", "")
+	recommendations, err := a.GetRecommendations(generateIDString(artistIDs), "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recommendations: %w", err)
 	}
@@ -77,4 +94,43 @@ func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 
 	// Return the recommendations with populated genres
 	return recommendations, nil
+}
+
+// Tracks retrieves the top tracks for the user and converts them into a TopTracksResponse
+func (a *AuthClient) TopTracks() (*TopTracksResponse, error) {
+	// Step 1: Get top items with items as `[]any`
+	topTracksRes, err := a.GetTopItems(Tracks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get top tracks: %v", err)
+	}
+
+	// Step 2: Convert TopResponse.Items to TopTracksResponse.Items
+	topTracks := &TopTracksResponse{
+		Href:     topTracksRes.Href,
+		Limit:    topTracksRes.Limit,
+		Next:     topTracksRes.Next,
+		Offset:   topTracksRes.Offset,
+		Previous: topTracksRes.Previous,
+		Total:    topTracksRes.Total,
+	}
+
+	for _, item := range topTracksRes.Items {
+		// Convert each item from map[string]interface{} to Track
+		if trackMap, ok := item.(map[string]any); ok {
+			var track Track
+			trackJSON, err := json.Marshal(trackMap) // Convert map to JSON
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal track item: %v", err)
+			}
+			err = json.Unmarshal(trackJSON, &track) // Convert JSON to Track struct
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal track item: %v", err)
+			}
+			topTracks.Items = append(topTracks.Items, track)
+		} else {
+			return nil, fmt.Errorf("item is not a map[string]interface{}: %v", item)
+		}
+	}
+
+	return topTracks, nil
 }

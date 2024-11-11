@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"slices"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/ericflores108/spotify/spotify"
 	"google.golang.org/api/googleapi"
 )
 
-// Recommendation represents a flat structure for storing recommendations in BigQuery
-type Recommendation struct {
+// TopTrack represents a flat structure for storing recommendations in BigQuery
+type TopTrack struct {
 	UserID      string   `bigquery:"user_id"`
 	TrackID     string   `bigquery:"track_id"`
 	TrackName   string   `bigquery:"track_name"`
@@ -24,7 +25,7 @@ type Recommendation struct {
 }
 
 // createTableIfNotExists checks if the BigQuery table exists and creates it if it doesn't
-func createRecommendationTableIfNotExists(ctx context.Context, client *bigquery.Client, tableID string) error {
+func createTracksTableIfNotExists(ctx context.Context, client *bigquery.Client, tableID string) error {
 	dataset := client.Dataset(DatasetID)
 	table := dataset.Table(tableID)
 
@@ -55,7 +56,7 @@ func createRecommendationTableIfNotExists(ctx context.Context, client *bigquery.
 			return fmt.Errorf("failed to create table: %v", err)
 		}
 
-		log.Println("BigQuery table 'recommendation' created successfully.")
+		log.Println("BigQuery table 'top_track' created successfully.")
 		return nil
 	}
 
@@ -64,18 +65,18 @@ func createRecommendationTableIfNotExists(ctx context.Context, client *bigquery.
 }
 
 // StoreRecommendations stores a list of recommendations in the BigQuery "recommendation" table
-func StoreRecommendations(ctx context.Context, client *bigquery.Client, userID string, recommendations *spotify.RecommendationsResponse) error {
+func StoreTopTracks(ctx context.Context, client *bigquery.Client, userID string, topTracks *spotify.TopTracksResponse) error {
 	// Define the BigQuery dataset and table
-	tableID := "recommendation"
+	tableID := "top_track"
 
 	// Ensure the table exists
-	if err := createRecommendationTableIfNotExists(ctx, client, tableID); err != nil {
+	if err := createTracksTableIfNotExists(ctx, client, tableID); err != nil {
 		return fmt.Errorf("failed to ensure table exists: %v", err)
 	}
 
 	// Prepare the data to insert
-	var rows []*Recommendation
-	for _, track := range recommendations.Tracks {
+	var rows []*TopTrack
+	for track := range slices.Values(topTracks.Items) {
 		if len(track.Artists) > 0 {
 			// Parse release date and ensure it is in YYYY-MM-DD format
 			releaseDate := parseSpotifyReleaseDate(track.Album.ReleaseDate)
@@ -87,7 +88,7 @@ func StoreRecommendations(ctx context.Context, client *bigquery.Client, userID s
 			}
 
 			// Prepare recommendation with the new Popularity field
-			recommendation := &Recommendation{
+			track := &TopTrack{
 				UserID:      userID,
 				TrackID:     track.ID,
 				TrackName:   track.Name,
@@ -98,7 +99,7 @@ func StoreRecommendations(ctx context.Context, client *bigquery.Client, userID s
 				Genres:      genres,
 				Popularity:  track.Popularity,
 			}
-			rows = append(rows, recommendation)
+			rows = append(rows, track)
 		}
 	}
 
