@@ -46,11 +46,11 @@ func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
 	return resp, err
 }
 
-func (a *AuthClient) Recommend() {
+func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 	artists, err := a.GetTopItems("artists")
 	if err != nil {
 		log.Panicf("failed to get top artists: %v", err)
 	}
 
-	a.GetRecommendations(generateIDString(artists), "", "")
+	return a.GetRecommendations(generateIDString(artists), "", "")
 }

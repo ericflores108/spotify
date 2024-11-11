@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/firestore"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/ericflores108/spotify/auth"
@@ -64,7 +65,20 @@ func main() {
 			AccessToken: accessToken,
 		}
 
-		spotifyClient.Recommend()
+		recommendations, err := spotifyClient.Recommend()
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to get recommendations: %v", err)
+		}
+
+		bqClient, err := bigquery.NewClient(ctx, config.SpotifyProjectID)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to create bq client: %v", err)
+		}
+
+		err = db.StoreRecommendations(ctx, bqClient, user.ID, recommendations)
+		if err != nil {
+			log.ErrorLogger.Fatalf("failed to store recommendations: %v", err)
+		}
 	}
 
 	log.Info("starting server...")
