@@ -4,31 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 )
 
 // GetTopItems retrieves the user's top artists or tracks from Spotify, based on the specified TopType.
-// It makes an authenticated request to the "me/top/{type}" endpoint and outputs the list of top items.
-// The function handles JSON parsing and prints out the names of the top items.
-func (a *AuthClient) GetTopItems(top TopType) {
+// It makes an authenticated request to the "me/top/{type}" endpoint and returns a pointer to ArtistsResponse or an error.
+func (a *AuthClient) GetTopItems(top TopType) (*ArtistsResponse, error) {
 	resp, err := a.Get("/me/top/" + string(top))
 	if err != nil {
-		log.Fatalf("Failed to get response: %v", err)
+		return nil, fmt.Errorf("failed to get response: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var artistsResponse ArtistsResponse
 	if err := json.Unmarshal(body, &artistsResponse); err != nil {
-		log.Fatalf("Failed to parse JSON: %v", err)
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	fmt.Println("Top Artists:", artistsResponse.Total)
-	for _, artist := range artistsResponse.Items {
-		fmt.Println(artist.Name)
-	}
+	// Return a pointer to artistsResponse and a nil error
+	return &artistsResponse, nil
 }

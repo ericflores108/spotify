@@ -64,7 +64,7 @@ func main() {
 			AccessToken: accessToken,
 		}
 
-		spotifyClient.GetTopItems("artists")
+		spotifyClient.Recommend()
 	}
 
 	log.Info("starting server...")
