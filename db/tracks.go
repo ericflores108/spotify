@@ -13,15 +13,16 @@ import (
 
 // TopTrack represents a flat structure for storing recommendations in BigQuery
 type TopTrack struct {
-	UserID      string   `bigquery:"user_id"`
-	TrackID     string   `bigquery:"track_id"`
-	TrackName   string   `bigquery:"track_name"`
-	AlbumName   string   `bigquery:"album_name"`
-	ArtistName  string   `bigquery:"artist_name"`
-	DurationMs  int64    `bigquery:"duration_ms"`
-	ReleaseDate string   `bigquery:"release_date"`
-	Genres      []string `bigquery:"genres"`
-	Popularity  int      `bigquery:"popularity"` // New popularity field
+	UserID          string   `bigquery:"user_id"`
+	UserDisplayName string   `bigquery:"user_name"`
+	TrackID         string   `bigquery:"track_id"`
+	TrackName       string   `bigquery:"track_name"`
+	AlbumName       string   `bigquery:"album_name"`
+	ArtistName      string   `bigquery:"artist_name"`
+	DurationMs      int64    `bigquery:"duration_ms"`
+	ReleaseDate     string   `bigquery:"release_date"`
+	Genres          []string `bigquery:"genres"`
+	Popularity      int      `bigquery:"popularity"` // New popularity field
 }
 
 // createTableIfNotExists checks if the BigQuery table exists and creates it if it doesn't
@@ -41,6 +42,7 @@ func createTracksTableIfNotExists(ctx context.Context, client *bigquery.Client, 
 		// Define the schema for the table
 		schema := bigquery.Schema{
 			{Name: "user_id", Type: bigquery.StringFieldType},
+			{Name: "user_name", Type: bigquery.StringFieldType},
 			{Name: "track_id", Type: bigquery.StringFieldType},
 			{Name: "track_name", Type: bigquery.StringFieldType},
 			{Name: "album_name", Type: bigquery.StringFieldType},
@@ -65,7 +67,7 @@ func createTracksTableIfNotExists(ctx context.Context, client *bigquery.Client, 
 }
 
 // StoreRecommendations stores a list of recommendations in the BigQuery "recommendation" table
-func StoreTopTracks(ctx context.Context, client *bigquery.Client, userID string, topTracks *spotify.TopTracksResponse) error {
+func StoreTopTracks(ctx context.Context, client *bigquery.Client, userID string, userDisplayName string, topTracks *spotify.TopTracksResponse) error {
 	// Define the BigQuery dataset and table
 	tableID := "top_track"
 
@@ -89,15 +91,16 @@ func StoreTopTracks(ctx context.Context, client *bigquery.Client, userID string,
 
 			// Prepare recommendation with the new Popularity field
 			track := &TopTrack{
-				UserID:      userID,
-				TrackID:     track.ID,
-				TrackName:   track.Name,
-				AlbumName:   track.Album.Name,
-				ArtistName:  track.Artists[0].Name, // Assuming the primary artist
-				DurationMs:  int64(track.DurationMs),
-				ReleaseDate: releaseDate, // Set the parsed release date
-				Genres:      genres,
-				Popularity:  track.Popularity,
+				UserID:          userID,
+				UserDisplayName: userDisplayName,
+				TrackID:         track.ID,
+				TrackName:       track.Name,
+				AlbumName:       track.Album.Name,
+				ArtistName:      track.Artists[0].Name, // Assuming the primary artist
+				DurationMs:      int64(track.DurationMs),
+				ReleaseDate:     releaseDate, // Set the parsed release date
+				Genres:          genres,
+				Popularity:      track.Popularity,
 			}
 			rows = append(rows, track)
 		}

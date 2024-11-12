@@ -170,7 +170,7 @@ func storeTracksHandler(w http.ResponseWriter, ctx context.Context, log *logger.
 		}
 		defer bqClient.Close()
 
-		err = db.StoreTopTracks(ctx, bqClient, user.ID, topTracks)
+		err = db.StoreTopTracks(ctx, bqClient, user.ID, user.DisplayName, topTracks)
 		if err != nil {
 			log.ErrorLogger.Fatalf("failed to store top tracks: %v", err)
 			http.Error(w, "Failed to store top tracks", http.StatusInternalServerError)
