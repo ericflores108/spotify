@@ -8,8 +8,8 @@ import (
 
 // GetTopItems retrieves the user's top artists or tracks from Spotify, based on the specified TopType.
 // It makes an authenticated request to the "me/top/{type}" endpoint and returns a pointer to TopResponse or an error.
-func (a *AuthClient) GetTopItems(top TopType) (*TopResponse, error) {
-	resp, err := a.Get("/me/top/" + string(top))
+func (c *AuthClient) GetTopItems(top TopType) (*TopResponse, error) {
+	resp, err := c.Get("/me/top/" + string(top))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get response: %w", err)
 	}

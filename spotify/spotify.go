@@ -20,14 +20,14 @@ type AuthClient struct {
 
 // Get creates and sends an authenticated GET request to the Spotify API at the specified endpoint.
 // It returns the HTTP response or an error if the request fails.
-func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
+func (c *AuthClient) Get(endpoint string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", BaseURL+endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
-	resp, err := a.Client.Do(req)
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +48,9 @@ func (a *AuthClient) Get(endpoint string) (*http.Response, error) {
 	return resp, err
 }
 
-func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
+func (c *AuthClient) Recommend() (*RecommendationsResponse, error) {
 	// Step 1: Get top artists for the user
-	topArtistsRes, err := a.GetTopItems(Artists)
+	topArtistsRes, err := c.GetTopItems(Artists)
 	if err != nil {
 		log.Panicf("failed to get top artists: %v", err)
 	}
@@ -71,7 +71,7 @@ func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 	}
 
 	// Step 2: Use top artists as seeds to get recommendations
-	recommendations, err := a.GetRecommendations(generateIDString(artistIDs), "", "")
+	recommendations, err := c.GetRecommendations(generateIDString(artistIDs), "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recommendations: %w", err)
 	}
@@ -81,7 +81,7 @@ func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 		if len(track.Artists) > 0 {
 			// Fetch artist details by ID for the primary artist
 			artistID := track.Artists[0].ID
-			artistDetails, err := a.GetArtist(artistID)
+			artistDetails, err := c.GetArtist(artistID)
 			if err != nil {
 				log.Printf("Warning: failed to get details for artist %s: %v", artistID, err)
 				continue // Skip this artist if fetching details fails
@@ -97,9 +97,9 @@ func (a *AuthClient) Recommend() (*RecommendationsResponse, error) {
 }
 
 // Tracks retrieves the top tracks for the user and converts them into a TopTracksResponse
-func (a *AuthClient) TopTracks() (*TopTracksResponse, error) {
+func (c *AuthClient) TopTracks() (*TopTracksResponse, error) {
 	// Step 1: Get top items with items as `[]any`
-	topTracksRes, err := a.GetTopItems(Tracks)
+	topTracksRes, err := c.GetTopItems(Tracks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get top tracks: %v", err)
 	}

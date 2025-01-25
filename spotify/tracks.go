@@ -9,7 +9,7 @@ import (
 
 // GetRecommendations retrieves recommendations based on seed artists, genres, and tracks.
 // It makes an authenticated request to the "recommendations" endpoint and returns a pointer to RecommendationsResponse or an error.
-func (a *AuthClient) GetRecommendations(seedArtists, seedGenres, seedTracks string) (*RecommendationsResponse, error) {
+func (c *AuthClient) GetRecommendations(seedArtists, seedGenres, seedTracks string) (*RecommendationsResponse, error) {
 	// Start building the endpoint with the base URL
 	endpoint := "/recommendations?"
 
@@ -28,7 +28,7 @@ func (a *AuthClient) GetRecommendations(seedArtists, seedGenres, seedTracks stri
 	endpoint = strings.TrimSuffix(endpoint, "&")
 
 	// Make the GET request using the AuthClient's Get method
-	resp, err := a.Get(endpoint)
+	resp, err := c.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get response: %w", err)
 	}

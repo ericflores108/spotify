@@ -20,7 +20,7 @@ type Recommendation struct {
 	DurationMs  int64    `bigquery:"duration_ms"`
 	ReleaseDate string   `bigquery:"release_date"`
 	Genres      []string `bigquery:"genres"`
-	Popularity  int      `bigquery:"popularity"` // New popularity field
+	Popularity  int      `bigquery:"popularity"`
 }
 
 // createTableIfNotExists checks if the BigQuery table exists and creates it if it doesn't

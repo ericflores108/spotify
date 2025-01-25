@@ -1,37 +1,48 @@
 package logger
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"sync"
 )
 
-// Logger holds different loggers for various levels
+// Logger struct with mutex for thread safety
 type Logger struct {
-	InfoLogger    *log.Logger
-	WarningLogger *log.Logger
-	ErrorLogger   *log.Logger
+	mu     sync.Mutex
+	logger *log.Logger
 }
 
-// NewLogger initializes and returns a Logger instance with configured loggers
-func NewLogger() *Logger {
+// NewLogger initializes a logger
+func NewLogger(output *os.File) *Logger {
 	return &Logger{
-		InfoLogger:    log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile),
-		WarningLogger: log.New(os.Stdout, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile),
-		ErrorLogger:   log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile),
+		logger: log.New(output, "", log.Ldate|log.Ltime|log.Lshortfile),
 	}
 }
 
-// Info logs informational messages
-func (l *Logger) Info(msg string) {
-	l.InfoLogger.Println(msg)
+var (
+	infoLogger  = NewLogger(os.Stdout)
+	debugLogger = NewLogger(os.Stdout)
+	errorLogger = NewLogger(os.Stderr)
+)
+
+// LogInfo logs informational messages
+func LogInfo(msg string, args ...interface{}) {
+	infoLogger.mu.Lock()
+	defer infoLogger.mu.Unlock()
+	infoLogger.logger.Printf("[INFO] %s", fmt.Sprintf(msg, args...))
 }
 
-// Warning logs warning messages
-func (l *Logger) Warning(msg string) {
-	l.WarningLogger.Println(msg)
+// LogDebug logs debug messages
+func LogDebug(msg string, args ...interface{}) {
+	debugLogger.mu.Lock()
+	defer debugLogger.mu.Unlock()
+	debugLogger.logger.Printf("[DEBUG] %s", fmt.Sprintf(msg, args...))
 }
 
-// Error logs error messages
-func (l *Logger) Error(msg string) {
-	l.ErrorLogger.Println(msg)
+// LogError logs error messages
+func LogError(msg string, args ...interface{}) {
+	errorLogger.mu.Lock()
+	defer errorLogger.mu.Unlock()
+	errorLogger.logger.Printf("[ERROR] %s", fmt.Sprintf(msg, args...))
 }

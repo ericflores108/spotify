@@ -8,12 +8,12 @@ import (
 
 // GetArtist retrieves artist information by artist ID.
 // It makes an authenticated request to the "artists/{id}" endpoint and returns a pointer to ArtistResponse or an error.
-func (a *AuthClient) GetArtist(artistID string) (*ArtistResponse, error) {
+func (c *AuthClient) GetArtist(artistID string) (*ArtistResponse, error) {
 	// Build the endpoint with the artist ID
 	endpoint := fmt.Sprintf("/artists/%s", artistID)
 
 	// Make the GET request using the AuthClient's Get method
-	resp, err := a.Get(endpoint)
+	resp, err := c.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get artist info: %w", err)
 	}
