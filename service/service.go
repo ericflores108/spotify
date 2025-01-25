@@ -184,3 +184,97 @@ func (s Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Contex
 	logger.LogInfo("Processed playlist creation for all users.")
 	fmt.Fprintln(w, "Finished creating playlists for all users.")
 }
+
+func (s Service) GetAlbumDetailsHandler(w http.ResponseWriter, ctx context.Context) {
+	// Retrieve all users from the SpotifyUser collection
+	users, err := db.GetAllUsers(ctx, s.Firestore)
+	if err != nil {
+		logger.LogError("Failed to get users: %v", err)
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	for user := range slices.Values(users) {
+		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
+
+		// Get user access token
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+		if err != nil {
+			logger.LogError("Failed to get access token for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		spotifyClient := &spotify.AuthClient{
+			Client:      &http.Client{},
+			AccessToken: accessToken,
+			UserID:      user.ID,
+		}
+
+		albumID := "0hvT3yIEysuuvkK73vgdcW?si=qJ0OwJpkT_2ubOm2XhisRg"
+
+		album, err := spotifyClient.GetSimplifiedAlbumDetails(albumID)
+		if err != nil {
+			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		// Log success
+		logger.LogInfo("Details %v", album)
+		fmt.Fprintf(w, "Details for album %v\n", album)
+	}
+
+	logger.LogInfo("Retrieved tracks.")
+	fmt.Fprintln(w, "Finished retrieving album tracks.")
+}
+
+func (s Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context) {
+	// Retrieve all users from the SpotifyUser collection
+	users, err := db.GetAllUsers(ctx, s.Firestore)
+	if err != nil {
+		logger.LogError("Failed to get users: %v", err)
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	for user := range slices.Values(users) {
+		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
+
+		// Get user access token
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+		if err != nil {
+			logger.LogError("Failed to get access token for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		spotifyClient := &spotify.AuthClient{
+			Client:      &http.Client{},
+			AccessToken: accessToken,
+			UserID:      user.ID,
+		}
+
+		// Define the playlist ID and tracks to add
+		playlistID := "644l2DeNJdITOkkMeDmfFx" // Replace with your target playlist ID
+		uris := []string{
+			"spotify:track:3HFBqhotJeEKHJzMEW31jZ",
+			"spotify:track:49FA0CCwP0GmIVbPzBqjD4",
+			"spotify:track:44KWbTVZev3SWdv1t5UoYE",
+			"spotify:track:4WhYHtwrNzjloBMdLOeK4o",
+			"spotify:track:6FTSWKjJlM1LGZsoIwlD90",
+		}
+		position := 0
+
+		// Add tracks to the playlist
+		err = spotifyClient.AddToPlaylist(playlistID, uris, &position)
+		if err != nil {
+			logger.LogError("Failed to add tracks to playlist for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		// Log success
+		logger.LogInfo("Tracks added to playlist for user %s", user.ID)
+		fmt.Fprintf(w, "Tracks added to playlist for user %s\n", user.ID)
+	}
+
+	logger.LogInfo("Processed adding tracks to playlists for all users.")
+	fmt.Fprintln(w, "Finished adding tracks to playlists for all users.")
+}

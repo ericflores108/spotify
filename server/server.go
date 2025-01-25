@@ -35,5 +35,13 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.CreatePlaylistHandler(w, s.Ctx)
 	})
 
+	mux.HandleFunc("/addToPlaylist", func(w http.ResponseWriter, r *http.Request) {
+		s.Service.AddToPlaylistHandler(w, s.Ctx)
+	})
+
+	mux.HandleFunc("/getAlbumDetails", func(w http.ResponseWriter, r *http.Request) {
+		s.Service.GetAlbumDetailsHandler(w, s.Ctx)
+	})
+
 	return mux
 }
