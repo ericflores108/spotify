@@ -28,3 +28,24 @@ func (c *AuthClient) GetTopItems(top TopType) (*TopResponse, error) {
 	// Return a pointer to artistsResponse and a nil error
 	return &topResponse, nil
 }
+
+func (c *AuthClient) GetUser() (*MeResponse, error) {
+	resp, err := c.Get("/me")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get response: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var me MeResponse
+	if err := json.Unmarshal(body, &me); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Return a pointer to artistsResponse and a nil error
+	return &me, nil
+}

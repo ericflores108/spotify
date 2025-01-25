@@ -138,3 +138,18 @@ type TopTracksResponse struct {
 	Total    int     `json:"total"`
 	Items    []Track `json:"items"` // Specifically typed as []Track
 }
+
+type NewPlaylist struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Public      bool   `json:"public"`
+}
+
+type NewPlaylistResponse struct {
+	ID  string `json:"id"` // id for the playlist
+	URI string `json:"uri"`
+}
+
+type MeResponse struct {
+	UserID string `json:"id"`
+}

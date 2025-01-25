@@ -31,5 +31,9 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.StoreTracksHandler(w, s.Ctx)
 	})
 
+	mux.HandleFunc("/createPlaylist", func(w http.ResponseWriter, r *http.Request) {
+		s.Service.CreatePlaylistHandler(w, s.Ctx)
+	})
+
 	return mux
 }

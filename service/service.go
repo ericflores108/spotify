@@ -103,6 +103,7 @@ func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) 
 		spotifyClient := &spotify.AuthClient{
 			Client:      &http.Client{},
 			AccessToken: accessToken,
+			UserID:      user.ID,
 		}
 
 		topTracks, err := spotifyClient.TopTracks()
@@ -130,4 +131,56 @@ func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) 
 
 	logger.LogInfo("Tracks stored successfully.")
 	fmt.Fprintf(w, "Tracks stored successfully.")
+}
+
+func (s Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Context) {
+	// Retrieve all users from the SpotifyUser collection
+	users, err := db.GetAllUsers(ctx, s.Firestore)
+	if err != nil {
+		logger.LogError("failed to get users: %v", err)
+		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	for user := range slices.Values(users) {
+		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
+
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+		if err != nil {
+			logger.LogError("failed to access token: %v", err)
+			continue // Skip to the next user
+		}
+
+		spotifyClient := &spotify.AuthClient{
+			Client:      &http.Client{},
+			AccessToken: accessToken,
+			UserID:      user.DisplayName,
+		}
+		playlist := spotify.NewPlaylist{
+			Name:        "golang playlist",
+			Description: "cool one",
+			Public:      false,
+		}
+
+		me, err := spotifyClient.GetUser()
+		fmt.Println(me)
+
+		if err != nil {
+			logger.LogError("failed to create playlist for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		resp, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
+		if err != nil {
+			logger.LogError("failed to create playlist for user %s: %v", user.ID, err)
+			continue // Skip to the next user
+		}
+
+		// Log the URI of the created playlist
+		logger.LogInfo("Playlist created for user %s: URI: %s", user.ID, resp.URI)
+		fmt.Fprintf(w, "Playlist created for user %s: URI: %s\n", user.ID, resp.URI)
+	}
+
+	logger.LogInfo("Processed playlist creation for all users.")
+	fmt.Fprintln(w, "Finished creating playlists for all users.")
 }
