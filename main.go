@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"net/http"
 	"os"
 
@@ -20,11 +21,21 @@ func main() {
 	defer appConfig.SecretManagerClient.Close()
 	defer appConfig.FirestoreClient.Close()
 
+	// Define a flag for the redirect URL
+	useLocalHost := flag.Bool("useLocalHost", false, "Use localhost as the redirect URL (default: production URL)")
+	flag.Parse()
+
+	// Determine the redirect URL
+	redirectURL := "https://spotify-123259034538.us-west1.run.app/callback" // Default production URL
+	if *useLocalHost {
+		redirectURL = "http://localhost:8080/callback"
+	}
+
 	// Initialize the service
 	svc := service.NewService(
 		appConfig.ClientID,
 		appConfig.ClientSecret,
-		"http://localhost:8080/callback",
+		redirectURL,
 		"spotify_auth_state",
 		appConfig.FirestoreClient,
 		appConfig.OpenAIClient,
