@@ -204,7 +204,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<title>Spotify Playlist</title>
+		<title>Titled - Playlist</title>
 		<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
@@ -478,7 +478,7 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<title>User Form</title>
+		<title>Titled - User Form</title>
 		<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
