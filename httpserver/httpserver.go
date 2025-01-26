@@ -2,9 +2,9 @@ package httpserver
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 
-	"github.com/ericflores108/spotify/htmlpages"
 	"github.com/ericflores108/spotify/service"
 )
 
@@ -23,9 +23,33 @@ func NewServer(ctx context.Context, service *service.Service) *Server {
 func (s *Server) RegisterRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Define the template for the root page
+	tmpl := template.Must(template.New("index").Parse(`
+<!doctype html>
+<html>
+<head>
+	<title>Authorization Code Flow Example</title>
+</head>
+<body>
+	<div>
+		<a href="/login">Log in with Spotify</a>
+	</div>
+</body>
+</html>`))
+
+	// Serve the root page with the template
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlpages.HelloWorldHTML))
+		err := tmpl.Execute(w, nil)
+		if err != nil {
+			http.Error(w, "Failed to render template", http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/login", s.Service.LoginHandler)
+
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		s.Service.CallbackHandler(w, s.Ctx, r)
 	})
 
 	mux.HandleFunc("/topTracks", func(w http.ResponseWriter, r *http.Request) {

@@ -139,7 +139,10 @@ type NewPlaylistResponse struct {
 }
 
 type MeResponse struct {
-	UserID string `json:"id"`
+	UserID      string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+	Country     string `json:"country"`
 }
 
 type Playlist struct {

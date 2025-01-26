@@ -66,14 +66,25 @@ func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (
 }
 
 func CreateUser(ctx context.Context, client *firestore.Client, user User) (string, error) {
+	// Check if the user already exists
 	query := client.Collection("SpotifyUser").Where("id", "==", user.ID).Limit(1)
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 
-	if _, err := iter.Next(); err == nil {
-		return "", fmt.Errorf("user with ID %s already exists", user.ID)
+	docSnap, err := iter.Next()
+	if err == nil {
+		// If the user exists, update the document
+		_, err := docSnap.Ref.Set(ctx, user)
+		if err != nil {
+			return "", fmt.Errorf("failed to update user with ID %s: %w", user.ID, err)
+		}
+		return docSnap.Ref.ID, nil
+	} else if err != iterator.Done {
+		// If there's an error other than no documents, return the error
+		return "", fmt.Errorf("failed to query user: %w", err)
 	}
 
+	// If the user does not exist, create a new document
 	docRef, _, err := client.Collection("SpotifyUser").Add(ctx, user)
 	if err != nil {
 		return "", fmt.Errorf("failed to create user: %w", err)

@@ -2,10 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
+	"strings"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/firestore"
@@ -23,15 +27,19 @@ type Service struct {
 	ClientSecret string
 	Firestore    *firestore.Client
 	AI           *openai.Client
+	RedirectURI  string
+	StateKey     string
 }
 
 // Initialize dependencies
-func NewService(clientID, clientSecret string, firestoreClient *firestore.Client, aiClient *openai.Client) *Service {
+func NewService(clientID, clientSecret, redirectURI, stateKey string, firestoreClient *firestore.Client, aiClient *openai.Client) *Service {
 	return &Service{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Firestore:    firestoreClient,
 		AI:           aiClient,
+		RedirectURI:  redirectURI,
+		StateKey:     stateKey,
 	}
 }
 
@@ -189,7 +197,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	fmt.Fprintf(w, "Playlist %s\n", userPlaylist.ID)
 }
 
-func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) {
+func (s *Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) {
 	// Retrieve all users from the SpotifyUser collection
 	users, err := db.GetAllUsers(ctx, s.Firestore)
 	if err != nil {
@@ -241,7 +249,7 @@ func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) 
 	fmt.Fprintf(w, "Tracks stored successfully.")
 }
 
-func (s Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Context) {
+func (s *Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Context) {
 	// Retrieve all users from the SpotifyUser collection
 	users, err := db.GetAllUsers(ctx, s.Firestore)
 	if err != nil {
@@ -292,7 +300,7 @@ func (s Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Contex
 	fmt.Fprintln(w, "Finished creating playlists for all users.")
 }
 
-func (s Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context) {
+func (s *Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context) {
 	// Retrieve all users from the SpotifyUser collection
 	users, err := db.GetAllUsers(ctx, s.Firestore)
 	if err != nil {
@@ -341,4 +349,100 @@ func (s Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context
 
 	logger.LogInfo("Processed adding tracks to playlists for all users.")
 	fmt.Fprintln(w, "Finished adding tracks to playlists for all users.")
+}
+
+func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r *http.Request) {
+	state := r.URL.Query().Get("state")
+	code := r.URL.Query().Get("code")
+
+	cookie, err := r.Cookie(s.StateKey)
+	if err != nil || cookie.Value != state {
+		http.Error(w, "State mismatch", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange code for tokens
+	tokenURL := "https://accounts.spotify.com/api/token"
+	data := fmt.Sprintf("grant_type=authorization_code&code=%s&redirect_uri=%s", code, s.RedirectURI)
+	req, _ := http.NewRequest("POST", tokenURL, strings.NewReader(data))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.ClientID+":"+s.ClientSecret)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to get tokens", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check if the response is successful
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to get tokens from Spotify", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse the access token and refresh token
+	var tokenResponse struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		logger.LogError("Failed to decode token response: %v", err)
+		http.Error(w, "Failed to decode token response", http.StatusInternalServerError)
+		return
+	}
+
+	spotifyClient := &spotify.AuthClient{
+		Client:      &http.Client{},
+		AccessToken: tokenResponse.AccessToken,
+	}
+
+	spotifyUser, err := spotifyClient.GetUser()
+	if err != nil {
+		logger.LogError("Failed to get user from Spotify: %v", err)
+		http.Error(w, "Failed to get user from Spotify", http.StatusUnauthorized)
+		return
+	}
+
+	user := db.User{
+		ID:           spotifyUser.UserID,
+		DisplayName:  spotifyUser.DisplayName,
+		AccessToken:  tokenResponse.AccessToken,
+		RefreshToken: tokenResponse.RefreshToken,
+	}
+
+	docID, err := db.CreateUser(ctx, s.Firestore, user)
+	if err != nil {
+		logger.LogError("Failed to create Titled user: %v", err)
+		http.Error(w, "Failed to create Titled user", http.StatusUnauthorized)
+		return
+	}
+	logger.LogDebug("DOC ID: %s", docID)
+
+	// Respond to the client
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Callback handler successful! Tokens logged."))
+}
+
+func generateRandomString(length int) string {
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return base64.URLEncoding.EncodeToString(b)[:length]
+}
+
+func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	state := generateRandomString(16)
+	http.SetCookie(w, &http.Cookie{
+		Name:  s.StateKey,
+		Value: state,
+		Path:  "/",
+	})
+	authURL := fmt.Sprintf("https://accounts.spotify.com/authorize?response_type=code&client_id=%s&scope=%s&redirect_uri=%s&state=%s",
+		s.ClientID, config.SpotifyScope, s.RedirectURI, state)
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }

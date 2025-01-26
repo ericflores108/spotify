@@ -24,6 +24,8 @@ func main() {
 	svc := service.NewService(
 		appConfig.ClientID,
 		appConfig.ClientSecret,
+		"http://localhost:8080/callback",
+		"spotify_auth_state",
 		appConfig.FirestoreClient,
 		appConfig.OpenAIClient,
 	)
