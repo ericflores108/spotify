@@ -133,7 +133,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		Client: s.AI,
 	}
 
-	var trackUris []string
+	var trackUris, excludedTracks []string
 	for track := range slices.Values(albumTracks.Tracks.Items) {
 		trackUris = append(trackUris, track.URI)
 
@@ -141,11 +141,11 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 		if len(track.Artists) > 0 {
 			artist = track.Artists[0].Name
-		} else {
-			artist = "Unknown Artist"
 		}
 
-		sampledTrack, err := ai.FindTrackSamples(ctx, track.Name, artist)
+		excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", track.Name, artist))
+
+		sampledTrack, err := ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
 		if err != nil {
 			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
 			continue
@@ -170,6 +170,8 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		}
 
 		logger.LogDebug("Found Spotify URI: %s for track '%s' by '%s'", trackUri, sampledTrack.Name, sampledTrack.Artist)
+
+		excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", sampledTrack.Name, sampledTrack.Artist))
 
 		trackUris = append(trackUris, trackUri)
 	}
