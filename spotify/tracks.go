@@ -5,52 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 )
-
-// GetRecommendations retrieves recommendations based on seed artists, genres, and tracks.
-// It makes an authenticated request to the "recommendations" endpoint and returns a pointer to RecommendationsResponse or an error.
-func (c *AuthClient) GetRecommendations(seedArtists, seedGenres, seedTracks string) (*RecommendationsResponse, error) {
-	// Start building the endpoint with the base URL
-	endpoint := "/recommendations?"
-
-	// Append query parameters conditionally based on which are non-empty
-	if seedArtists != "" {
-		endpoint += fmt.Sprintf("seed_artists=%s&", seedArtists)
-	}
-	if seedGenres != "" {
-		endpoint += fmt.Sprintf("seed_genres=%s&", seedGenres)
-	}
-	if seedTracks != "" {
-		endpoint += fmt.Sprintf("seed_tracks=%s&", seedTracks)
-	}
-
-	// Remove the trailing "&" if any parameters were added
-	endpoint = strings.TrimSuffix(endpoint, "&")
-
-	// Make the GET request using the AuthClient's Get method
-	resp, err := c.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get response: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read and parse the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var recommendationsResponse RecommendationsResponse
-
-	// Unmarshal the JSON data into the struct
-	if err := json.Unmarshal(body, &recommendationsResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	// Return the parsed response and nil error on success
-	return &recommendationsResponse, nil
-}
 
 func (c *AuthClient) GetTrackURI(trackName, artistName string) (string, error) {
 	query := url.Values{}
@@ -83,4 +38,43 @@ func (c *AuthClient) GetTrackURI(trackName, artistName string) (string, error) {
 
 	// Return the URI of the first track found
 	return searchResponse.Tracks.Items[0].URI, nil
+}
+
+// Tracks retrieves the top tracks for the user and converts them into a TopTracksResponse
+func (c *AuthClient) TopTracks() (*TopTracksResponse, error) {
+	// Step 1: Get top items with items as `[]any`
+	topTracksRes, err := c.GetTopItems(Tracks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get top tracks: %v", err)
+	}
+
+	// Step 2: Convert TopResponse.Items to TopTracksResponse.Items
+	topTracks := &TopTracksResponse{
+		Href:     topTracksRes.Href,
+		Limit:    topTracksRes.Limit,
+		Next:     topTracksRes.Next,
+		Offset:   topTracksRes.Offset,
+		Previous: topTracksRes.Previous,
+		Total:    topTracksRes.Total,
+	}
+
+	for _, item := range topTracksRes.Items {
+		// Convert each item from map[string]interface{} to Track
+		if trackMap, ok := item.(map[string]any); ok {
+			var track Track
+			trackJSON, err := json.Marshal(trackMap) // Convert map to JSON
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal track item: %v", err)
+			}
+			err = json.Unmarshal(trackJSON, &track) // Convert JSON to Track struct
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal track item: %v", err)
+			}
+			topTracks.Items = append(topTracks.Items, track)
+		} else {
+			return nil, fmt.Errorf("item is not a map[string]interface{}: %v", item)
+		}
+	}
+
+	return topTracks, nil
 }

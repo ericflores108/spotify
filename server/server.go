@@ -39,10 +39,6 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.AddToPlaylistHandler(w, s.Ctx)
 	})
 
-	mux.HandleFunc("/getAlbumDetails", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.GetAlbumDetailsHandler(w, s.Ctx)
-	})
-
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
 		queryParams := r.URL.Query()
 		albumID := queryParams.Get("albumID")
