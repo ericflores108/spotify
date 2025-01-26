@@ -4,7 +4,9 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"strings"
 
+	"github.com/ericflores108/spotify/logger"
 	"github.com/ericflores108/spotify/service"
 )
 
@@ -60,21 +62,43 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.CreatePlaylistHandler(w, s.Ctx)
 	})
 
-	mux.HandleFunc("/addToPlaylist", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.AddToPlaylistHandler(w, s.Ctx)
-	})
-
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
-		queryParams := r.URL.Query()
-		albumID := queryParams.Get("albumID")
-		userID := queryParams.Get("userID")
-
-		if albumID == "" || userID == "" {
-			http.Error(w, "Missing albumName or userID query parameters", http.StatusBadRequest)
+		// Ensure the request method is POST
+		if r.Method != http.MethodPost {
+			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 			return
 		}
 
-		s.Service.GeneratePlaylistHandler(w, s.Ctx, albumID, userID)
+		// Parse the form data
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
+
+		// Extract the userID and album name from the form
+		userID := r.FormValue("userID")
+		albumURL := r.FormValue("albumURL")
+
+		if userID == "" {
+			http.Error(w, "User ID cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if albumURL == "" {
+			http.Error(w, "Album link cannot be empty", http.StatusBadRequest)
+			return
+		}
+		// Process the form submission
+		logger.LogInfo("User ID submitted: %s", userID)
+		logger.LogInfo("Album link submitted: %s", albumURL)
+
+		parts := strings.Split(albumURL, "/album/")
+		if len(parts) < 2 {
+			http.Error(w, "Invalid URL format", http.StatusBadRequest)
+			return
+		}
+		logger.LogDebug("Album link submitted: %s", albumURL)
+
+		s.Service.GeneratePlaylistHandler(w, s.Ctx, parts[1], userID, r)
 	})
 
 	mux.HandleFunc("/createUser", func(w http.ResponseWriter, r *http.Request) {

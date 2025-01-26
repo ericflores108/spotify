@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"slices"
@@ -85,7 +86,7 @@ func (s *Service) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Context, albumID, userID string) {
+func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Context, albumID, userID string, r *http.Request) {
 	user, err := db.GetUserByID(ctx, s.Firestore, userID)
 	if err != nil {
 		logger.LogError("failed to get user: %v", err)
@@ -118,19 +119,6 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	if err != nil {
 		logger.LogError("failed to get spotify user id %s: %v", user.ID, err)
 		http.Error(w, "Failed to get spotify user id", http.StatusInternalServerError)
-		return
-	}
-
-	playlist := spotify.NewPlaylist{
-		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),
-		Description: "Generated playlist from Titled.",
-		Public:      true,
-	}
-
-	userPlaylist, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
-	if err != nil {
-		logger.LogError("failed to create playlist %s: %v", user.ID, err)
-		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
 		return
 	}
 
@@ -186,6 +174,19 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		trackUris = append(trackUris, trackUri)
 	}
 
+	playlist := spotify.NewPlaylist{
+		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),
+		Description: "Generated playlist from Titled.",
+		Public:      true,
+	}
+
+	userPlaylist, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
+	if err != nil {
+		logger.LogError("failed to create playlist %s: %v", user.ID, err)
+		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
+		return
+	}
+
 	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackUris, nil)
 	if err != nil {
 		logger.LogError("Failed to get add %v to playlist %s", trackUris, userPlaylist.ID)
@@ -194,7 +195,19 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	}
 
 	logger.LogInfo("URI: %s - ID: %s", userPlaylist.URI, userPlaylist.ID)
-	fmt.Fprintf(w, "Playlist %s\n", userPlaylist.ID)
+
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>Spotify Playlist</title>
+		</head>
+		<body>
+			<p>Your Spotify playlist is ready! <a href="%s">Click here</a> to open it.</p>
+		</body>
+		</html>`, userPlaylist.ExternalURLs.Spotify)
 }
 
 func (s *Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) {
@@ -300,57 +313,6 @@ func (s *Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Conte
 	fmt.Fprintln(w, "Finished creating playlists for all users.")
 }
 
-func (s *Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context) {
-	// Retrieve all users from the SpotifyUser collection
-	users, err := db.GetAllUsers(ctx, s.Firestore)
-	if err != nil {
-		logger.LogError("Failed to get users: %v", err)
-		http.Error(w, "Failed to get users", http.StatusInternalServerError)
-		return
-	}
-
-	for user := range slices.Values(users) {
-		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
-
-		// Get user access token
-		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
-		if err != nil {
-			logger.LogError("Failed to get access token for user %s: %v", user.ID, err)
-			continue // Skip to the next user
-		}
-
-		spotifyClient := &spotify.AuthClient{
-			Client:      &http.Client{},
-			AccessToken: accessToken,
-			UserID:      user.ID,
-		}
-
-		// Define the playlist ID and tracks to add
-		playlistID := "644l2DeNJdITOkkMeDmfFx" // Replace with your target playlist ID
-		uris := []string{
-			"spotify:track:3HFBqhotJeEKHJzMEW31jZ",
-			"spotify:track:49FA0CCwP0GmIVbPzBqjD4",
-			"spotify:track:44KWbTVZev3SWdv1t5UoYE",
-			"spotify:track:4WhYHtwrNzjloBMdLOeK4o",
-			"spotify:track:6FTSWKjJlM1LGZsoIwlD90",
-		}
-
-		// Add tracks to the playlist
-		err = spotifyClient.AddToPlaylist(playlistID, uris, nil)
-		if err != nil {
-			logger.LogError("Failed to add tracks to playlist for user %s: %v", user.ID, err)
-			continue // Skip to the next user
-		}
-
-		// Log success
-		logger.LogInfo("Tracks added to playlist for user %s", user.ID)
-		fmt.Fprintf(w, "Tracks added to playlist for user %s\n", user.ID)
-	}
-
-	logger.LogInfo("Processed adding tracks to playlists for all users.")
-	fmt.Fprintln(w, "Finished adding tracks to playlists for all users.")
-}
-
 func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
@@ -376,13 +338,11 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	}
 	defer resp.Body.Close()
 
-	// Check if the response is successful
 	if resp.StatusCode != http.StatusOK {
 		http.Error(w, "Failed to get tokens from Spotify", http.StatusUnauthorized)
 		return
 	}
 
-	// Parse the access token and refresh token
 	var tokenResponse struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
@@ -420,10 +380,59 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	}
 	logger.LogDebug("DOC ID: %s", docID)
 
-	// Respond to the client
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("Callback handler successful! Tokens logged."))
+	tmpl := template.Must(template.New("form").Parse(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<title>User Form</title>
+		<script>
+			// Add a script to handle form submission
+			function showLoading(event) {
+				// Prevent the default form submission
+				event.preventDefault();
+
+				// Show the loading message
+				document.getElementById('loadingMessage').style.display = 'block';
+
+				// Submit the form programmatically
+				event.target.submit();
+			}
+		</script>
+	</head>
+	<body>
+		<form action="/generatePlaylist" method="post" onsubmit="showLoading(event)">
+			<input type="hidden" id="userID" name="userID" value="{{.UserID}}">
+			
+			<label for="albumURL">Insert Spotify Album Link:</label>
+			<input type="text" id="albumURL" name="albumURL" value="{{.AlbumURL}}"><br><br>
+
+			<button type="submit">Generate Spotify Playlist</button>
+		</form>
+
+		<!-- Loading message hidden by default -->
+		<div id="loadingMessage" style="display:none; color:blue; margin-top:20px;">
+			Please wait... Generating your Spotify playlist.
+		</div>
+	</body>
+	</html>`))
+
+	formData := struct {
+		UserID   string
+		AlbumURL string
+	}{
+		UserID:   spotifyUser.UserID,
+		AlbumURL: "", // Placeholder for album name input
+	}
+
+	// Set the content type for the response
+	w.Header().Set("Content-Type", "text/html")
+
+	// Render the template
+	if err := tmpl.Execute(w, formData); err != nil {
+		logger.LogError("Failed to render template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func generateRandomString(length int) string {

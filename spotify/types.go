@@ -133,9 +133,14 @@ type NewPlaylist struct {
 	Public      bool   `json:"public"`
 }
 
+type ExternalURLS struct {
+	Spotify string `json:"spotify"`
+}
+
 type NewPlaylistResponse struct {
-	ID  string `json:"id"` // id for the playlist
-	URI string `json:"uri"`
+	ID           string       `json:"id"`
+	URI          string       `json:"uri"`
+	ExternalURLs ExternalURLS `json:"external_urls"`
 }
 
 type MeResponse struct {
@@ -248,5 +253,6 @@ type SimplifiedAlbumDetails struct {
 	TrackNames []string `json:"track_names"`
 }
 type SearchResponse struct {
-	Tracks AlbumTracks `json:"tracks"`
+	Tracks AlbumTracks   `json:"tracks"`
+	Albums AlbumResponse `json:"albums"`
 }
