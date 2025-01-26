@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ericflores108/spotify/api"
 	"github.com/ericflores108/spotify/config"
+	"github.com/ericflores108/spotify/httpserver"
 	"github.com/ericflores108/spotify/logger"
 	"github.com/ericflores108/spotify/service"
 )
@@ -29,7 +29,7 @@ func main() {
 	)
 
 	// Initialize the server and register routes
-	srv := api.NewServer(ctx, svc)
+	srv := httpserver.NewServer(ctx, svc)
 	mux := srv.RegisterRoutes()
 
 	// Determine port for HTTP service
