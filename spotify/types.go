@@ -239,3 +239,11 @@ type ExternalIDs struct {
 	EAN  string `json:"ean"`
 	UPC  string `json:"upc"`
 }
+type SimplifiedAlbumDetails struct {
+	Artist     string   `json:"artist"`
+	AlbumName  string   `json:"album_name"`
+	TrackNames []string `json:"track_names"`
+}
+type SearchResponse struct {
+	Tracks AlbumTracks `json:"tracks"`
+}

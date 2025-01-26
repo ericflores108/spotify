@@ -1,11 +1,9 @@
 package spotify
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 )
 
 func (c *AuthClient) CreatePlaylist(userID string, playlist NewPlaylist) (*NewPlaylistResponse, error) {
@@ -33,37 +31,18 @@ func (c *AuthClient) CreatePlaylist(userID string, playlist NewPlaylist) (*NewPl
 }
 
 func (c *AuthClient) AddToPlaylist(playlistID string, uris []string, position *int) error {
-	// Define the payload structure
 	payload := map[string]interface{}{
 		"uris": uris,
 	}
 
-	// Add the position if provided
 	if position != nil {
 		payload["position"] = *position
 	}
 
-	// Convert the payload to JSON
-	jsonData, err := json.Marshal(payload)
+	endpoint := fmt.Sprintf("/playlists/%s/tracks", playlistID)
+	resp, err := c.Post(endpoint, payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	// Create the POST request
-	url := fmt.Sprintf("/playlists/%s/tracks", playlistID)
-	req, err := http.NewRequest("POST", BaseURL+url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set the necessary headers
-	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("failed to get response: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -78,21 +57,11 @@ func (c *AuthClient) AddToPlaylist(playlistID string, uris []string, position *i
 
 func (c *AuthClient) GetUserPlaylists(userID string) ([]Playlist, error) {
 	// Construct the URL for the request
-	url := fmt.Sprintf("/users/%s/playlists", userID)
+	endpoint := fmt.Sprintf("/users/%s/playlists", userID)
 
-	// Create the GET request
-	req, err := http.NewRequest("GET", BaseURL+url, nil)
+	resp, err := c.Get(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set the Authorization header
-	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
-
-	// Send the request
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to get response: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -119,22 +88,11 @@ func (c *AuthClient) GetUserPlaylists(userID string) ([]Playlist, error) {
 }
 
 func (c *AuthClient) GetPlaylistTracks(playlistID string) ([]Track, error) {
-	// Construct the URL for the request
-	url := fmt.Sprintf("/playlists/%s/tracks", playlistID)
+	endpoint := fmt.Sprintf("/playlists/%s/tracks", playlistID)
 
-	// Create the GET request
-	req, err := http.NewRequest("GET", BaseURL+url, nil)
+	resp, err := c.Get(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set the Authorization header
-	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
-
-	// Send the request
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to get response: %w", err)
 	}
 	defer resp.Body.Close()
 

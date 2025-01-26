@@ -5,4 +5,5 @@ const (
 	SpotifyClientID  = "Spotify_client_id"
 	SpotifySecretID  = "spotify_client_secret"
 	BigQueryDataset  = "spotify-440505"
+	OpenAIApiKeyID   = "openai_api_key"
 )

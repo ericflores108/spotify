@@ -8,25 +8,29 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/firestore"
+	"github.com/ericflores108/spotify/ai"
 	"github.com/ericflores108/spotify/auth"
 	"github.com/ericflores108/spotify/config"
 	"github.com/ericflores108/spotify/db"
 	"github.com/ericflores108/spotify/logger"
 	"github.com/ericflores108/spotify/spotify"
+	"github.com/openai/openai-go"
 )
 
 type Service struct {
 	ClientID     string
 	ClientSecret string
 	Firestore    *firestore.Client
+	AI           *openai.Client
 }
 
 // Initialize dependencies
-func NewService(clientID, clientSecret string, firestoreClient *firestore.Client) *Service {
+func NewService(clientID, clientSecret string, firestoreClient *firestore.Client, aiClient *openai.Client) *Service {
 	return &Service{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Firestore:    firestoreClient,
+		AI:           aiClient,
 	}
 }
 
@@ -194,6 +198,10 @@ func (s Service) GetAlbumDetailsHandler(w http.ResponseWriter, ctx context.Conte
 		return
 	}
 
+	ai := &ai.AIClient{
+		Client: s.AI,
+	}
+
 	for user := range slices.Values(users) {
 		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
@@ -210,12 +218,61 @@ func (s Service) GetAlbumDetailsHandler(w http.ResponseWriter, ctx context.Conte
 			UserID:      user.ID,
 		}
 
-		albumID := "0hvT3yIEysuuvkK73vgdcW?si=qJ0OwJpkT_2ubOm2XhisRg"
+		albumID := "0ZJt4dCoI19u71k37E1nQu?si=GuU0W8GrSAScnxWmvo8uWQ"
 
-		album, err := spotifyClient.GetSimplifiedAlbumDetails(albumID)
+		album, err := spotifyClient.GetAlbumDetails(albumID)
 		if err != nil {
 			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
 			continue // Skip to the next user
+		}
+
+		var trackUris []string
+
+		for track := range slices.Values(album.Tracks.Items) {
+			trackUris = append(trackUris, track.URI)
+
+			var artist string
+
+			if len(track.Artists) > 0 {
+				artist = track.Artists[0].Name
+			} else {
+				artist = "Unknown Artist"
+			}
+
+			sampledTrack, err := ai.FindTrackSamples(ctx, track.Name, artist)
+			if err != nil {
+				logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
+				continue
+			}
+
+			if sampledTrack == nil {
+				logger.LogDebug("No valid sampled track found.")
+				continue
+			}
+
+			logger.LogDebug("Found sampled track: Artist: %s, Name: %s", sampledTrack.Artist, sampledTrack.Name)
+
+			trackUri, err := spotifyClient.GetTrackURI(sampledTrack.Name, sampledTrack.Artist)
+			if err != nil {
+				logger.LogError("Failed to get Spotify URI for sampled track '%s' by '%s': %v", sampledTrack.Name, sampledTrack.Artist, err)
+				continue
+			}
+
+			if trackUri == "" {
+				logger.LogDebug("No Spotify URI found for sampled track '%s' by '%s'.", sampledTrack.Name, sampledTrack.Artist)
+				continue
+			}
+
+			logger.LogDebug("Found Spotify URI: %s for track '%s' by '%s'", trackUri, sampledTrack.Name, sampledTrack.Artist)
+
+			trackUris = append(trackUris, trackUri)
+		}
+
+		playlistID := "644l2DeNJdITOkkMeDmfFx"
+		err = spotifyClient.AddToPlaylist(playlistID, trackUris, nil)
+		if err != nil {
+			logger.LogError("Failed to get add %v to playlist %s", trackUris, playlistID)
+			continue
 		}
 
 		// Log success
@@ -261,10 +318,9 @@ func (s Service) AddToPlaylistHandler(w http.ResponseWriter, ctx context.Context
 			"spotify:track:4WhYHtwrNzjloBMdLOeK4o",
 			"spotify:track:6FTSWKjJlM1LGZsoIwlD90",
 		}
-		position := 0
 
 		// Add tracks to the playlist
-		err = spotifyClient.AddToPlaylist(playlistID, uris, &position)
+		err = spotifyClient.AddToPlaylist(playlistID, uris, nil)
 		if err != nil {
 			logger.LogError("Failed to add tracks to playlist for user %s: %v", user.ID, err)
 			continue // Skip to the next user

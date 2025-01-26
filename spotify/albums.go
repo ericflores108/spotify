@@ -41,7 +41,7 @@ func (c *AuthClient) GetAlbumDetails(albumID string) (*AlbumResponse, error) {
 	return &albumResponse, nil
 }
 
-func (c *AuthClient) GetSimplifiedAlbumDetails(albumID string) (map[string]interface{}, error) {
+func (c *AuthClient) GetSimplifiedAlbumDetails(albumID string) (*SimplifiedAlbumDetails, error) {
 	// Fetch album details using the existing GetAlbumDetails method
 	albumDetails, err := c.GetAlbumDetails(albumID)
 	if err != nil {
@@ -49,14 +49,21 @@ func (c *AuthClient) GetSimplifiedAlbumDetails(albumID string) (map[string]inter
 	}
 
 	// Prepare the simplified response
-	simplifiedResponse := map[string]interface{}{
-		"AlbumName":  albumDetails.Name,
-		"TrackNames": []string{},
+	simplifiedResponse := &SimplifiedAlbumDetails{
+		AlbumName:  albumDetails.Name,
+		TrackNames: []string{},
+	}
+
+	// Extract the first artist's name if available
+	if len(albumDetails.Artists) > 0 {
+		simplifiedResponse.Artist = albumDetails.Artists[0].Name
+	} else {
+		simplifiedResponse.Artist = "Unknown Artist"
 	}
 
 	// Extract track names
 	for _, track := range albumDetails.Tracks.Items {
-		simplifiedResponse["TrackNames"] = append(simplifiedResponse["TrackNames"].([]string), track.Name)
+		simplifiedResponse.TrackNames = append(simplifiedResponse.TrackNames, track.Name)
 	}
 
 	return simplifiedResponse, nil

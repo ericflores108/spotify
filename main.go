@@ -21,7 +21,12 @@ func main() {
 	defer appConfig.FirestoreClient.Close()
 
 	// Initialize the service
-	svc := service.NewService(appConfig.ClientID, appConfig.ClientSecret, appConfig.FirestoreClient)
+	svc := service.NewService(
+		appConfig.ClientID,
+		appConfig.ClientSecret,
+		appConfig.FirestoreClient,
+		appConfig.OpenAIClient,
+	)
 
 	// Initialize the server and register routes
 	srv := server.NewServer(ctx, svc)
