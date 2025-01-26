@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	// Determine the redirect URL
-	redirectURL := "https://spotify-123259034538.us-west1.run.app/callback" // Default production URL
+	redirectURL := "https://titled96.com/callback" // Default production URL
 	if *useLocalHost {
 		redirectURL = "http://localhost:8080/callback"
 	}
