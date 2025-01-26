@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -32,6 +33,48 @@ func NewService(clientID, clientSecret string, firestoreClient *firestore.Client
 		Firestore:    firestoreClient,
 		AI:           aiClient,
 	}
+}
+
+func (s *Service) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+	var newUser db.User
+	if err := json.NewDecoder(r.Body).Decode(&newUser); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if newUser.ID == "" || newUser.DisplayName == "" || newUser.AccessToken == "" || newUser.RefreshToken == "" {
+		http.Error(w, "Missing required fields: ID, DisplayName, RefreshToken, or AccessToken", http.StatusBadRequest)
+		return
+	}
+
+	query := s.Firestore.Collection("SpotifyUser").Where("id", "==", newUser.ID).Limit(1)
+	iter := query.Documents(r.Context())
+	defer iter.Stop()
+
+	doc, err := iter.Next()
+	if err == nil {
+		_, err := doc.Ref.Set(r.Context(), newUser)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to update user: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]string{"message": "User updated successfully", "documentID": doc.Ref.ID}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	docRef, _, err := s.Firestore.Collection("SpotifyUser").Add(r.Context(), newUser)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create user: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]string{"message": "User created successfully", "documentID": docRef.ID}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Context, albumID, userID string) {
@@ -142,8 +185,8 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	logger.LogInfo("Playlist %s", userPlaylist.URI)
-	fmt.Fprintf(w, "Playlist %s\n", userPlaylist.URI)
+	logger.LogInfo("URI: %s - ID: %s", userPlaylist.URI, userPlaylist.ID)
+	fmt.Fprintf(w, "Playlist %s\n", userPlaylist.ID)
 }
 
 func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) {

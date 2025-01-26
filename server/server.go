@@ -56,5 +56,13 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.GeneratePlaylistHandler(w, s.Ctx, albumID, userID)
 	})
 
+	mux.HandleFunc("/createUser", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+			return
+		}
+		s.Service.CreateUserHandler(w, r)
+	})
+
 	return mux
 }

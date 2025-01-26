@@ -16,13 +16,11 @@ type User struct {
 	RefreshToken string `firestore:"refresh_token"`
 }
 
-// GetAllUsers retrieves all user documents from the SpotifyUser collection
 func GetAllUsers(ctx context.Context, client *firestore.Client) ([]User, error) {
 	var users []User
 
-	// Reference the SpotifyUser collection
 	iter := client.Collection("SpotifyUser").Documents(ctx)
-	defer iter.Stop() // Close iterator after use
+	defer iter.Stop()
 
 	for {
 		doc, err := iter.Next()
@@ -33,12 +31,11 @@ func GetAllUsers(ctx context.Context, client *firestore.Client) ([]User, error) 
 			return nil, fmt.Errorf("failed to iterate documents: %w", err)
 		}
 
-		// Map document data to a User struct
 		var user User
 		if err := doc.DataTo(&user); err != nil {
 			return nil, fmt.Errorf("failed to map document data: %w", err)
 		}
-		user.ID = doc.Ref.ID // Optionally add Firestore document ID
+		user.ID = doc.Ref.ID
 		users = append(users, user)
 	}
 
@@ -46,12 +43,10 @@ func GetAllUsers(ctx context.Context, client *firestore.Client) ([]User, error) 
 }
 
 func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (*User, error) {
-	// Query the collection for documents where the "id" field matches the provided userID
 	query := client.Collection("SpotifyUser").Where("id", "==", userID).Limit(1)
 
-	// Execute the query
 	iter := query.Documents(ctx)
-	defer iter.Stop() // Ensure iterator is properly closed
+	defer iter.Stop()
 
 	doc, err := iter.Next()
 	if err != nil {
@@ -61,12 +56,28 @@ func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	// Map document data to a User struct
 	var user User
 	if err := doc.DataTo(&user); err != nil {
 		return nil, fmt.Errorf("failed to map document data: %w", err)
 	}
-	user.ID = doc.Ref.ID // Optionally set the Firestore document ID if needed
+	user.ID = doc.Ref.ID
 
 	return &user, nil
+}
+
+func CreateUser(ctx context.Context, client *firestore.Client, user User) (string, error) {
+	query := client.Collection("SpotifyUser").Where("id", "==", user.ID).Limit(1)
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	if _, err := iter.Next(); err == nil {
+		return "", fmt.Errorf("user with ID %s already exists", user.ID)
+	}
+
+	docRef, _, err := client.Collection("SpotifyUser").Add(ctx, user)
+	if err != nil {
+		return "", fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return docRef.ID, nil
 }
