@@ -34,55 +34,116 @@ func NewService(clientID, clientSecret string, firestoreClient *firestore.Client
 	}
 }
 
-func (s Service) StoreRecommendationsHandler(w http.ResponseWriter, ctx context.Context) {
-	// Retrieve all users from the SpotifyUser collection
-	users, err := db.GetAllUsers(ctx, s.Firestore)
+func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Context, albumID, userID string) {
+	user, err := db.GetUserByID(ctx, s.Firestore, userID)
 	if err != nil {
-		logger.LogError("failed to get users: %v", err)
-		http.Error(w, "Failed to get users", http.StatusInternalServerError)
+		logger.LogError("failed to get user: %v", err)
+		http.Error(w, "Failed to get user", http.StatusInternalServerError)
 		return
 	}
 
-	for user := range slices.Values(users) {
-		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
+	logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
-		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
-		if err != nil {
-			logger.LogError("failed to access token: %v", err)
-			http.Error(w, "Failed to get access token", http.StatusInternalServerError)
-			return
-		}
-
-		spotifyClient := &spotify.AuthClient{
-			Client:      &http.Client{},
-			AccessToken: accessToken,
-		}
-
-		recommendations, err := spotifyClient.Recommend()
-		if err != nil {
-			logger.LogError("failed to get recommendations: %v", err)
-			http.Error(w, "Failed to get recommendations", http.StatusInternalServerError)
-			return
-		}
-
-		bqClient, err := bigquery.NewClient(ctx, config.SpotifyProjectID)
-		if err != nil {
-			logger.LogError("failed to create BigQuery client: %v", err)
-			http.Error(w, "Failed to create BigQuery client", http.StatusInternalServerError)
-			return
-		}
-		defer bqClient.Close()
-
-		err = db.StoreRecommendations(ctx, bqClient, user.ID, recommendations)
-		if err != nil {
-			logger.LogError("failed to store recommendations: %v", err)
-			http.Error(w, "Failed to store recommendations", http.StatusInternalServerError)
-			return
-		}
+	accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+	if err != nil {
+		logger.LogError("failed to access token: %v", err)
+		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
+		return
 	}
 
-	logger.LogInfo("Recommendations stored successfully.")
-	fmt.Fprintf(w, "Recommendations stored successfully.")
+	spotifyClient := &spotify.AuthClient{
+		Client:      &http.Client{},
+		AccessToken: accessToken,
+	}
+
+	album, err := spotifyClient.GetAlbum(albumID)
+	if err != nil {
+		logger.LogError("failed to get album: %v", err)
+		http.Error(w, "Failed to get album", http.StatusInternalServerError)
+		return
+	}
+
+	me, err := spotifyClient.GetUser()
+	if err != nil {
+		logger.LogError("failed to get spotify user id %s: %v", user.ID, err)
+		http.Error(w, "Failed to get spotify user id", http.StatusInternalServerError)
+		return
+	}
+
+	playlist := spotify.NewPlaylist{
+		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),
+		Description: "Generated playlist from Titled.",
+		Public:      true,
+	}
+
+	userPlaylist, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
+	if err != nil {
+		logger.LogError("failed to create playlist %s: %v", user.ID, err)
+		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
+		return
+	}
+
+	albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
+	if err != nil {
+		logger.LogError("Failed to get album tracks for user %s: %v", user.ID, err)
+		http.Error(w, "Failed to get album tracks", http.StatusInternalServerError)
+		return
+	}
+
+	ai := &ai.AIClient{
+		Client: s.AI,
+	}
+
+	var trackUris []string
+	for track := range slices.Values(albumTracks.Tracks.Items) {
+		trackUris = append(trackUris, track.URI)
+
+		var artist string
+
+		if len(track.Artists) > 0 {
+			artist = track.Artists[0].Name
+		} else {
+			artist = "Unknown Artist"
+		}
+
+		sampledTrack, err := ai.FindTrackSamples(ctx, track.Name, artist)
+		if err != nil {
+			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
+			continue
+		}
+
+		if sampledTrack == nil {
+			logger.LogDebug("No valid sampled track found.")
+			continue
+		}
+
+		logger.LogDebug("Found sampled track: Artist: %s, Name: %s", sampledTrack.Artist, sampledTrack.Name)
+
+		trackUri, err := spotifyClient.GetTrackURI(sampledTrack.Name, sampledTrack.Artist)
+		if err != nil {
+			logger.LogError("Failed to get Spotify URI for sampled track '%s' by '%s': %v", sampledTrack.Name, sampledTrack.Artist, err)
+			continue
+		}
+
+		if trackUri == "" {
+			logger.LogDebug("No Spotify URI found for sampled track '%s' by '%s'.", sampledTrack.Name, sampledTrack.Artist)
+			continue
+		}
+
+		logger.LogDebug("Found Spotify URI: %s for track '%s' by '%s'", trackUri, sampledTrack.Name, sampledTrack.Artist)
+
+		trackUris = append(trackUris, trackUri)
+	}
+
+	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackUris, nil)
+	if err != nil {
+		logger.LogError("Failed to get add %v to playlist %s", trackUris, userPlaylist.ID)
+		http.Error(w, "Failed to add tracks to playlist", http.StatusInternalServerError)
+		return
+	}
+
+	logger.LogInfo("Playlist %s", userPlaylist.URI)
+	fmt.Fprintf(w, "Playlist %s\n", userPlaylist.URI)
 }
 
 func (s Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context) {
@@ -167,7 +228,6 @@ func (s Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Contex
 		}
 
 		me, err := spotifyClient.GetUser()
-		fmt.Println(me)
 
 		if err != nil {
 			logger.LogError("failed to create playlist for user %s: %v", user.ID, err)
@@ -220,7 +280,7 @@ func (s Service) GetAlbumDetailsHandler(w http.ResponseWriter, ctx context.Conte
 
 		albumID := "0ZJt4dCoI19u71k37E1nQu?si=GuU0W8GrSAScnxWmvo8uWQ"
 
-		album, err := spotifyClient.GetAlbumDetails(albumID)
+		album, err := spotifyClient.GetAlbumTracks(albumID)
 		if err != nil {
 			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
 			continue // Skip to the next user

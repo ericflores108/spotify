@@ -7,7 +7,36 @@ import (
 	"net/http"
 )
 
-func (c *AuthClient) GetAlbumDetails(albumID string) (*AlbumResponse, error) {
+func (c *AuthClient) GetAlbum(albumID string) (*Album, error) {
+	url := fmt.Sprintf("/albums/%s", albumID)
+
+	req, err := http.NewRequest("GET", BaseURL+url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var albumResponse Album
+	if err := json.Unmarshal(body, &albumResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return &albumResponse, nil
+}
+
+func (c *AuthClient) GetAlbumTracks(albumID string) (*AlbumResponse, error) {
 	// Construct the URL for the album endpoint
 	url := fmt.Sprintf("/albums/%s/tracks", albumID)
 
@@ -39,32 +68,4 @@ func (c *AuthClient) GetAlbumDetails(albumID string) (*AlbumResponse, error) {
 	}
 
 	return &albumResponse, nil
-}
-
-func (c *AuthClient) GetSimplifiedAlbumDetails(albumID string) (*SimplifiedAlbumDetails, error) {
-	// Fetch album details using the existing GetAlbumDetails method
-	albumDetails, err := c.GetAlbumDetails(albumID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get album details: %w", err)
-	}
-
-	// Prepare the simplified response
-	simplifiedResponse := &SimplifiedAlbumDetails{
-		AlbumName:  albumDetails.Name,
-		TrackNames: []string{},
-	}
-
-	// Extract the first artist's name if available
-	if len(albumDetails.Artists) > 0 {
-		simplifiedResponse.Artist = albumDetails.Artists[0].Name
-	} else {
-		simplifiedResponse.Artist = "Unknown Artist"
-	}
-
-	// Extract track names
-	for _, track := range albumDetails.Tracks.Items {
-		simplifiedResponse.TrackNames = append(simplifiedResponse.TrackNames, track.Name)
-	}
-
-	return simplifiedResponse, nil
 }
