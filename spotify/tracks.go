@@ -9,7 +9,13 @@ import (
 
 func (c *AuthClient) GetTrackURI(trackName, artistName string) (string, error) {
 	query := url.Values{}
-	query.Set("q", fmt.Sprintf("track:%s artist:%s", trackName, artistName))
+
+	if artistName != "" {
+		query.Set("q", fmt.Sprintf("track:%s artist:%s", trackName, artistName))
+	} else {
+		query.Set("q", fmt.Sprintf("track:%s", trackName))
+	}
+
 	query.Set("type", "track")
 	query.Set("limit", "1")
 
