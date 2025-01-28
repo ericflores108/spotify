@@ -45,22 +45,6 @@ const (
 	Tracks  TopType = "tracks"
 )
 
-// RecommendationsResponse represents the main structure of the Spotify recommendations response.
-type RecommendationsResponse struct {
-	Seeds  []Seed  `json:"seeds"`
-	Tracks []Track `json:"tracks"`
-}
-
-// Seed represents the information about a seed item.
-type Seed struct {
-	AfterFilteringSize int    `json:"afterFilteringSize"`
-	AfterRelinkingSize int    `json:"afterRelinkingSize"`
-	Href               string `json:"href"`
-	ID                 string `json:"id"`
-	InitialPoolSize    int    `json:"initialPoolSize"`
-	Type               string `json:"type"`
-}
-
 // Track represents a track item in the recommendations.
 type Track struct {
 	Album            Album         `json:"album"`

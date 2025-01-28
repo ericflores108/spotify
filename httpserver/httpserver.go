@@ -174,14 +174,6 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		s.Service.CallbackHandler(w, s.Ctx, r)
 	})
 
-	mux.HandleFunc("/topTracks", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.StoreTracksHandler(w, s.Ctx)
-	})
-
-	mux.HandleFunc("/createPlaylist", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.CreatePlaylistHandler(w, s.Ctx)
-	})
-
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
 		// Ensure the request method is POST
 		if r.Method != http.MethodPost {
@@ -219,14 +211,6 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		logger.LogDebug("Album link submitted: %s", albumURL)
 
 		s.Service.GeneratePlaylistHandler(w, s.Ctx, parts[1], userID, r)
-	})
-
-	mux.HandleFunc("/createUser", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-			return
-		}
-		s.Service.CreateUserHandler(w, r)
 	})
 
 	return mux
