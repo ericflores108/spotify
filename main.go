@@ -14,14 +14,14 @@ import (
 )
 
 func main() {
-	logger.LogInfo("starting app")
-
 	ctx := context.Background()
 
 	err := logger.InitializeLoggers(ctx, config.GoogleProjectID)
 	if err != nil {
 		log.Fatalf("Failed to initialize loggers: %v", err)
 	}
+
+	logger.LogInfo("starting app")
 
 	appConfig := config.GetConfig(ctx)
 	defer appConfig.SecretManagerClient.Close()

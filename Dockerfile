@@ -26,6 +26,9 @@ RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/main /app/main
 
+# Copy static files (including favicon.ico) to the production image.
+COPY static /app/static
+
 # Set working directory
 WORKDIR /app
 
