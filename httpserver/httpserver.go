@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -195,6 +196,12 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 			http.Error(w, "User ID cannot be empty", http.StatusBadRequest)
 			return
 		}
+
+		// Set the logger prefix to the user ID
+		logger.InfoLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
+		logger.DebugLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
+		logger.ErrorLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
+
 		if albumURL == "" {
 			http.Error(w, "Album link cannot be empty", http.StatusBadRequest)
 			return

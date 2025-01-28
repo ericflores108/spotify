@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"net/http"
 	"os"
 
@@ -16,6 +17,11 @@ func main() {
 	logger.LogInfo("starting app")
 
 	ctx := context.Background()
+
+	err := logger.InitializeLoggers(ctx, config.GoogleProjectID)
+	if err != nil {
+		log.Fatalf("Failed to initialize loggers: %v", err)
+	}
 
 	appConfig := config.GetConfig(ctx)
 	defer appConfig.SecretManagerClient.Close()

@@ -40,31 +40,31 @@ func GetConfig(ctx context.Context) *AppConfig {
 		}
 
 		// Retrieve secrets
-		clientID, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, SpotifyClientID)
+		clientID, err := auth.GetSecret(ctx, secretManagerClient, GoogleProjectID, SpotifyClientID)
 		if err != nil {
 			logger.LogError("failed to retrieve SpotifyClientID secret: %v", err)
 			log.Fatal(err)
 		}
 
-		clientSecret, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, SpotifySecretID)
+		clientSecret, err := auth.GetSecret(ctx, secretManagerClient, GoogleProjectID, SpotifySecretID)
 		if err != nil {
 			logger.LogError("failed to retrieve SpotifySecretID secret: %v", err)
 			log.Fatal(err)
 		}
 
-		openAISecret, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, OpenAIApiKeyID)
+		openAISecret, err := auth.GetSecret(ctx, secretManagerClient, GoogleProjectID, OpenAIApiKeyID)
 		if err != nil {
 			logger.LogError("failed to retrieve OpenAIApiKeyID secret: %v", err)
 			log.Fatal(err)
 		}
 
-		geniusClientSecret, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, GeniusClientSecret)
+		geniusClientSecret, err := auth.GetSecret(ctx, secretManagerClient, GoogleProjectID, GeniusClientSecret)
 		if err != nil {
 			logger.LogError("failed to retrieve GeniusClientSecret secret: %v", err)
 			log.Fatal(err)
 		}
 
-		geniusClientID, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, GeniusClientID)
+		geniusClientID, err := auth.GetSecret(ctx, secretManagerClient, GoogleProjectID, GeniusClientID)
 		if err != nil {
 			logger.LogError("failed to retrieve GeniusClientID secret: %v", err)
 			log.Fatal(err)
@@ -82,7 +82,7 @@ func GetConfig(ctx context.Context) *AppConfig {
 		)
 
 		// Initialize Firestore client
-		firestoreClient, err := firestore.NewClient(ctx, SpotifyProjectID)
+		firestoreClient, err := firestore.NewClient(ctx, GoogleProjectID)
 		if err != nil {
 			logger.LogError("failed to create Firestore client: %v", err)
 			log.Fatal(err)
