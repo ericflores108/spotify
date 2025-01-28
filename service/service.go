@@ -149,7 +149,6 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	for i, track := range albumTracks.Tracks.Items {
 		wg.Add(1)
 
-		// Use the correct type for 'track'
 		go func(index int, track spotify.TrackDetails) {
 			defer wg.Done()
 
@@ -191,7 +190,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 				logger.LogError("Error occurred at geniusSearch: %v", err)
 			}
 
-			// Find using AI if Genius doesn't work
+			// Find using AI if Genius doesn't have results
 			if sampledTrack == nil {
 				sampledTrack, err = ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
 				if err != nil {
@@ -278,6 +277,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	<html>
 	<head>
 		<title>Titled - Playlist</title>
+		<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 		<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
@@ -552,6 +552,7 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	<html>
 	<head>
 		<title>Titled - User Form</title>
+		<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 		<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>

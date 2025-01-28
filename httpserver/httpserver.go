@@ -25,11 +25,15 @@ func NewServer(ctx context.Context, service *service.Service) *Server {
 func (s *Server) RegisterRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Serve static files (e.g., favicon.ico) from the ./static directory
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
 	tmpl := template.Must(template.New("index").Parse(`
 	<!doctype html>
 	<html>
 	<head>
 		<title>Titled - Generate a Spotify playlist based off an album</title>
+		<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 		<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
