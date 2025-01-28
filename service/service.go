@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/firestore"
@@ -93,7 +94,7 @@ func (s *Service) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Context, albumID, userID string, r *http.Request) {
 	user, err := db.GetUserByID(ctx, s.Firestore, userID)
 	if err != nil {
-		logger.LogError("failed to get user: %v", err)
+		logger.LogError("Failed to get user: %v", err)
 		http.Error(w, "Failed to get user", http.StatusInternalServerError)
 		return
 	}
@@ -102,7 +103,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	spotifyAccessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.SpotifyClientID, s.SpotifyClientSecret)
 	if err != nil {
-		logger.LogError("failed to access token: %v", err)
+		logger.LogError("Failed to access token: %v", err)
 		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
 		return
 	}
@@ -114,22 +115,22 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	album, err := spotifyClient.GetAlbum(albumID)
 	if err != nil {
-		logger.LogError("failed to get album: %v", err)
+		logger.LogError("Failed to get album: %v", err)
 		http.Error(w, "Failed to get album", http.StatusInternalServerError)
-		return
-	}
-
-	me, err := spotifyClient.GetUser()
-	if err != nil {
-		logger.LogError("failed to get spotify user id %s: %v", user.ID, err)
-		http.Error(w, "Failed to get spotify user id", http.StatusInternalServerError)
 		return
 	}
 
 	albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
 	if err != nil {
-		logger.LogError("Failed to get album tracks for user %s: %v", user.ID, err)
+		logger.LogError("Failed to get album tracks: %v", err)
 		http.Error(w, "Failed to get album tracks", http.StatusInternalServerError)
+		return
+	}
+
+	me, err := spotifyClient.GetUser()
+	if err != nil {
+		logger.LogError("Failed to get Spotify user: %v", err)
+		http.Error(w, "Failed to get Spotify user", http.StatusInternalServerError)
 		return
 	}
 
@@ -137,97 +138,117 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		Client: s.AI,
 	}
 
-	var trackUris, excludedTracks []string
-	for track := range slices.Values(albumTracks.Tracks.Items) {
-		trackUris = append(trackUris, track.URI)
+	var excludedTracks []string
+	var mu sync.Mutex // Protect shared state
+	var wg sync.WaitGroup
+	results := make(chan struct {
+		index     int
+		trackURIs []string
+	}, len(albumTracks.Tracks.Items))
 
-		var artist string
+	for i, track := range albumTracks.Tracks.Items {
+		wg.Add(1)
 
-		if len(track.Artists) > 0 {
-			artist = track.Artists[0].Name
-		} else {
-			logger.LogDebug("Unknown Artist for track %s", track.Name)
-		}
+		// Use the correct type for 'track'
+		go func(index int, track spotify.TrackDetails) {
+			defer wg.Done()
 
-		logger.LogDebug("Starting search... %s by %s", track.Name, artist)
+			var trackURIsForTrack []string
+			var artist string
 
-		var sampledTrack *config.SampledTrack
-		// keep slice of songs we covered already
-		excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", track.Name, artist))
-		// Find using Genius
-		geniusSearch, err := s.GeniusClient.Search(track.Name, artist)
-		if err == nil {
-			if len(geniusSearch.Response.Hits) > 0 {
-				logger.LogDebug("Finding track by genius %s by %s", track.Name, artist)
+			if len(track.Artists) > 0 {
+				artist = track.Artists[0].Name
+			} else {
+				logger.LogDebug("Unknown artist for track %s", track.Name)
+			}
 
+			logger.LogDebug("Starting search for %s by %s", track.Name, artist)
+
+			// Add to excluded tracks with mutex
+			mu.Lock()
+			trackURIsForTrack = append(trackURIsForTrack, track.URI)
+			excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", track.Name, artist))
+			mu.Unlock()
+
+			var sampledTrack *config.SampledTrack
+
+			// Find using Genius
+			geniusSearch, err := s.GeniusClient.Search(track.Name, artist)
+			if err == nil && len(geniusSearch.Response.Hits) > 0 {
 				geniusTrack, err := s.GeniusClient.Songs(strconv.Itoa(geniusSearch.Response.Hits[0].Result.ID))
-				if err != nil {
-					logger.LogError("Failed to genius retrieve geniusTrack to playlist for user %s: %v", user.ID, err)
-					// continue to find using AI
-				} else {
-					logger.LogDebug("Finding song relationships in genius. Song ID: %s", strconv.Itoa(geniusSearch.Response.Hits[0].Result.ID))
-
-					if len(geniusTrack.Response.Song.SongRelationships) > 0 {
-						logger.LogDebug("song relationships length: %d", len(geniusTrack.Response.Song.SongRelationships))
-						// find relationship where RelationshipType = 'samples'
-						for relation := range slices.Values(geniusTrack.Response.Song.SongRelationships) {
-							if relation.RelationshipType == "samples" && len(relation.Songs) > 0 {
-								logger.LogDebug("Found %d related songs on Genius.", len(relation.Songs))
-
-								sampledTrack = &config.SampledTrack{
-									Artist: relation.Songs[0].Artist,
-									Name:   relation.Songs[0].Title,
-								}
-								logger.LogDebug("Found Genius 'Samples' sampledTrack. Song: %s | Artist: %s", sampledTrack.Name, sampledTrack.Artist)
-								break
+				if err == nil && len(geniusTrack.Response.Song.SongRelationships) > 0 {
+					for _, relation := range geniusTrack.Response.Song.SongRelationships {
+						if relation.RelationshipType == "samples" && len(relation.Songs) > 0 {
+							sampledTrack = &config.SampledTrack{
+								Artist: relation.Songs[0].Artist,
+								Name:   relation.Songs[0].Title,
 							}
+							break
 						}
 					}
 				}
-			}
-		} else {
-			// continue to find using AI
-			logger.LogError("Failed to genius search to playlist for user %s: %v", user.ID, err)
-		}
-
-		// Find using AI
-		if sampledTrack == nil {
-			logger.LogDebug("Finding track by AI %s by %s", track.Name, artist)
-
-			sampledTrack, err = ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
-			if err != nil {
-				logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
-				continue
+			} else {
+				logger.LogError("Error occurred at geniusSearch: %v", err)
 			}
 
+			// Find using AI if Genius doesn't work
 			if sampledTrack == nil {
-				logger.LogDebug("No valid sampled track found.")
-				continue
+				sampledTrack, err = ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
+				if err != nil {
+					logger.LogError("Error occurred at sampledTrack: %v", err)
+					return
+				}
+
+				if sampledTrack == nil {
+					logger.LogError("No sampledTrack found for userID - %s: %v", userID, err)
+					return
+				}
 			}
-		} else {
-			logger.LogDebug("Found sample track in Genius")
-		}
 
-		logger.LogDebug("Found sampled track: Artist: %s, Name: %s", sampledTrack.Artist, sampledTrack.Name)
+			// Get Spotify URI
+			trackURI, err := spotifyClient.GetTrackURI(sampledTrack.Name, sampledTrack.Artist)
+			if err != nil {
+				logger.LogError("Error occurred at trackURI: %v", err)
+				return
+			}
 
-		trackUri, err := spotifyClient.GetTrackURI(sampledTrack.Name, sampledTrack.Artist)
-		if err != nil {
-			logger.LogError("Failed to get Spotify URI for sampled track '%s' by '%s': %v", sampledTrack.Name, sampledTrack.Artist, err)
-			continue
-		}
+			if trackURI == "" {
+				logger.LogError("No trackURI found for - TRACK - %s - ARTIST - %s: %v", sampledTrack.Name, sampledTrack.Artist, err)
+				return
+			}
 
-		if trackUri == "" {
-			logger.LogDebug("No Spotify URI found for sampled track '%s' by '%s'.", sampledTrack.Name, sampledTrack.Artist)
-			continue
-		}
+			trackURIsForTrack = append(trackURIsForTrack, trackURI)
 
-		logger.LogDebug("Found Spotify URI: %s for track '%s' by '%s'", trackUri, sampledTrack.Name, sampledTrack.Artist)
+			mu.Lock()
+			excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", sampledTrack.Name, sampledTrack.Artist))
+			mu.Unlock()
 
-		excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", sampledTrack.Name, sampledTrack.Artist))
-
-		trackUris = append(trackUris, trackUri)
+			results <- struct {
+				index     int
+				trackURIs []string
+			}{index, trackURIsForTrack}
+		}(i, track)
 	}
 
+	// Close results channel once all goroutines finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results in order
+	orderedResults := make([][]string, len(albumTracks.Tracks.Items))
+	for result := range results {
+		orderedResults[result.index] = result.trackURIs
+	}
+
+	// Flatten results
+	var trackURIs []string
+	for _, uris := range orderedResults {
+		trackURIs = append(trackURIs, uris...)
+	}
+
+	// Create Spotify playlist
 	playlist := spotify.NewPlaylist{
 		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),
 		Description: "Generated playlist from Titled.",
@@ -236,19 +257,19 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	userPlaylist, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
 	if err != nil {
-		logger.LogError("failed to create playlist %s: %v", user.ID, err)
+		logger.LogError("Failed to create playlist: %v", err)
 		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
 		return
 	}
 
-	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackUris, nil)
+	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackURIs, nil)
 	if err != nil {
-		logger.LogError("Failed to get add %v to playlist %s", trackUris, userPlaylist.ID)
+		logger.LogError("Failed to add tracks to playlist: %v", err)
 		http.Error(w, "Failed to add tracks to playlist", http.StatusInternalServerError)
 		return
 	}
 
-	logger.LogInfo("URI: %s - ID: %s", userPlaylist.URI, userPlaylist.ID)
+	logger.LogInfo("Playlist created. URI: %s, ID: %s", userPlaylist.URI, userPlaylist.ID)
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
