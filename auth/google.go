@@ -11,7 +11,7 @@ import (
 // GetSecret retrieves the secret data from Google Secret Manager.
 func GetSecret(ctx context.Context, client *secretmanager.Client, projectID, secretID string) (string, error) {
 	// Define the resource name for the secret version to access.
-	secretVersionName := fmt.Sprintf("projects/%s/secrets/%s/versions/1", projectID, secretID)
+	secretVersionName := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projectID, secretID)
 
 	// Build the request to access the secret version.
 	accessRequest := &secretmanagerpb.AccessSecretVersionRequest{

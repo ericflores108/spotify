@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 )
 
 func (c *AuthClient) GetTrackURI(trackName, artistName string) (string, error) {
 	query := url.Values{}
 
-	if artistName != "" {
+	if artistName != "" && !strings.Contains(trackName, " by ") {
 		query.Set("q", fmt.Sprintf("track:%s artist:%s", trackName, artistName))
 	} else {
 		query.Set("q", fmt.Sprintf("track:%s", trackName))

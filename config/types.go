@@ -1,4 +1,4 @@
-package ai
+package config
 
 // A struct that will be converted to a Structered Outputs response schema
 type SampledTrack struct {

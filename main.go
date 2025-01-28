@@ -39,6 +39,7 @@ func main() {
 		"spotify_auth_state",
 		appConfig.FirestoreClient,
 		appConfig.OpenAIClient,
+		appConfig.GeniusClient,
 	)
 
 	// Initialize the server and register routes

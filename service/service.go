@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"cloud.google.com/go/bigquery"
@@ -18,29 +19,32 @@ import (
 	"github.com/ericflores108/spotify/auth"
 	"github.com/ericflores108/spotify/config"
 	"github.com/ericflores108/spotify/db"
+	"github.com/ericflores108/spotify/genius"
 	"github.com/ericflores108/spotify/logger"
 	"github.com/ericflores108/spotify/spotify"
 	"github.com/openai/openai-go"
 )
 
 type Service struct {
-	ClientID     string
-	ClientSecret string
-	Firestore    *firestore.Client
-	AI           *openai.Client
-	RedirectURI  string
-	StateKey     string
+	SpotifyClientID     string
+	SpotifyClientSecret string
+	Firestore           *firestore.Client
+	AI                  *openai.Client
+	RedirectURI         string
+	StateKey            string
+	GeniusClient        *genius.GeniusClient
 }
 
 // Initialize dependencies
-func NewService(clientID, clientSecret, redirectURI, stateKey string, firestoreClient *firestore.Client, aiClient *openai.Client) *Service {
+func NewService(spotifyClientID, spotifyClientSecret, redirectURI, stateKey string, firestoreClient *firestore.Client, aiClient *openai.Client, geniusClient *genius.GeniusClient) *Service {
 	return &Service{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Firestore:    firestoreClient,
-		AI:           aiClient,
-		RedirectURI:  redirectURI,
-		StateKey:     stateKey,
+		SpotifyClientID:     spotifyClientID,
+		SpotifyClientSecret: spotifyClientSecret,
+		Firestore:           firestoreClient,
+		AI:                  aiClient,
+		RedirectURI:         redirectURI,
+		StateKey:            stateKey,
+		GeniusClient:        geniusClient,
 	}
 }
 
@@ -96,7 +100,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
-	accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+	spotifyAccessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.SpotifyClientID, s.SpotifyClientSecret)
 	if err != nil {
 		logger.LogError("failed to access token: %v", err)
 		http.Error(w, "Failed to get access token", http.StatusInternalServerError)
@@ -105,7 +109,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	spotifyClient := &spotify.AuthClient{
 		Client:      &http.Client{},
-		AccessToken: accessToken,
+		AccessToken: spotifyAccessToken,
 	}
 
 	album, err := spotifyClient.GetAlbum(albumID)
@@ -141,19 +145,67 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 		if len(track.Artists) > 0 {
 			artist = track.Artists[0].Name
+		} else {
+			logger.LogDebug("Unknown Artist for track %s", track.Name)
 		}
 
+		logger.LogDebug("Starting search... %s by %s", track.Name, artist)
+
+		var sampledTrack *config.SampledTrack
+		// keep slice of songs we covered already
 		excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", track.Name, artist))
+		// Find using Genius
+		geniusSearch, err := s.GeniusClient.Search(track.Name, artist)
+		if err == nil {
+			if len(geniusSearch.Response.Hits) > 0 {
+				logger.LogDebug("Finding track by genius %s by %s", track.Name, artist)
 
-		sampledTrack, err := ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
-		if err != nil {
-			logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
-			continue
+				geniusTrack, err := s.GeniusClient.Songs(strconv.Itoa(geniusSearch.Response.Hits[0].Result.ID))
+				if err != nil {
+					logger.LogError("Failed to genius retrieve geniusTrack to playlist for user %s: %v", user.ID, err)
+					// continue to find using AI
+				} else {
+					logger.LogDebug("Finding song relationships in genius. Song ID: %s", strconv.Itoa(geniusSearch.Response.Hits[0].Result.ID))
+
+					if len(geniusTrack.Response.Song.SongRelationships) > 0 {
+						logger.LogDebug("song relationships length: %d", len(geniusTrack.Response.Song.SongRelationships))
+						// find relationship where RelationshipType = 'samples'
+						for relation := range slices.Values(geniusTrack.Response.Song.SongRelationships) {
+							if relation.RelationshipType == "samples" && len(relation.Songs) > 0 {
+								logger.LogDebug("Found %d related songs on Genius.", len(relation.Songs))
+
+								sampledTrack = &config.SampledTrack{
+									Artist: relation.Songs[0].Artist,
+									Name:   relation.Songs[0].Title,
+								}
+								logger.LogDebug("Found Genius 'Samples' sampledTrack. Song: %s | Artist: %s", sampledTrack.Name, sampledTrack.Artist)
+								break
+							}
+						}
+					}
+				}
+			}
+		} else {
+			// continue to find using AI
+			logger.LogError("Failed to genius search to playlist for user %s: %v", user.ID, err)
 		}
 
+		// Find using AI
 		if sampledTrack == nil {
-			logger.LogDebug("No valid sampled track found.")
-			continue
+			logger.LogDebug("Finding track by AI %s by %s", track.Name, artist)
+
+			sampledTrack, err = ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
+			if err != nil {
+				logger.LogError("Failed to get tracks to playlist for user %s: %v", user.ID, err)
+				continue
+			}
+
+			if sampledTrack == nil {
+				logger.LogDebug("No valid sampled track found.")
+				continue
+			}
+		} else {
+			logger.LogDebug("Found sample track in Genius")
 		}
 
 		logger.LogDebug("Found sampled track: Artist: %s, Name: %s", sampledTrack.Artist, sampledTrack.Name)
@@ -316,7 +368,7 @@ func (s *Service) StoreTracksHandler(w http.ResponseWriter, ctx context.Context)
 	for user := range slices.Values(users) {
 		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
-		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.SpotifyClientID, s.SpotifyClientSecret)
 		if err != nil {
 			logger.LogError("failed to access token: %v", err)
 			http.Error(w, "Failed to get access token", http.StatusInternalServerError)
@@ -368,7 +420,7 @@ func (s *Service) CreatePlaylistHandler(w http.ResponseWriter, ctx context.Conte
 	for user := range slices.Values(users) {
 		logger.LogDebug("User ID: %s, Display Name: %s", user.ID, user.DisplayName)
 
-		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.ClientID, s.ClientSecret)
+		accessToken, err := auth.GetUserAccessToken(user.RefreshToken, s.SpotifyClientID, s.SpotifyClientSecret)
 		if err != nil {
 			logger.LogError("failed to access token: %v", err)
 			continue // Skip to the next user
@@ -421,7 +473,7 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	tokenURL := "https://accounts.spotify.com/api/token"
 	data := fmt.Sprintf("grant_type=authorization_code&code=%s&redirect_uri=%s", code, s.RedirectURI)
 	req, _ := http.NewRequest("POST", tokenURL, strings.NewReader(data))
-	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.ClientID+":"+s.ClientSecret)))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.SpotifyClientID+":"+s.SpotifyClientSecret)))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := &http.Client{}
@@ -647,6 +699,6 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Path:  "/",
 	})
 	authURL := fmt.Sprintf("https://accounts.spotify.com/authorize?response_type=code&client_id=%s&scope=%s&redirect_uri=%s&state=%s",
-		s.ClientID, config.SpotifyScope, s.RedirectURI, state)
+		s.SpotifyClientID, config.SpotifyScope, s.RedirectURI, state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }

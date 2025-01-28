@@ -8,6 +8,7 @@ import (
 	"cloud.google.com/go/firestore"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/ericflores108/spotify/auth"
+	"github.com/ericflores108/spotify/genius"
 	"github.com/ericflores108/spotify/logger"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -19,6 +20,7 @@ type AppConfig struct {
 	SecretManagerClient *secretmanager.Client
 	FirestoreClient     *firestore.Client
 	OpenAIClient        *openai.Client
+	GeniusClient        *genius.GeniusClient
 }
 
 var (
@@ -56,6 +58,24 @@ func GetConfig(ctx context.Context) *AppConfig {
 			log.Fatal(err)
 		}
 
+		geniusClientSecret, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, GeniusClientSecret)
+		if err != nil {
+			logger.LogError("failed to retrieve GeniusClientSecret secret: %v", err)
+			log.Fatal(err)
+		}
+
+		geniusClientID, err := auth.GetSecret(ctx, secretManagerClient, SpotifyProjectID, GeniusClientID)
+		if err != nil {
+			logger.LogError("failed to retrieve GeniusClientID secret: %v", err)
+			log.Fatal(err)
+		}
+
+		geniusClient, err := genius.NewClient(geniusClientID, geniusClientSecret)
+		if err != nil {
+			logger.LogError("failed to retrieve geniusClient: %v", err)
+			log.Fatal(err)
+		}
+
 		// Initialize OpenAI client
 		aiClient := openai.NewClient(
 			option.WithAPIKey(openAISecret),
@@ -75,6 +95,7 @@ func GetConfig(ctx context.Context) *AppConfig {
 			SecretManagerClient: secretManagerClient,
 			FirestoreClient:     firestoreClient,
 			OpenAIClient:        aiClient,
+			GeniusClient:        geniusClient,
 		}
 
 		logger.LogInfo("Configuration initialized successfully.")

@@ -1,6 +1,9 @@
 package ai
 
-import "github.com/invopop/jsonschema"
+import (
+	"github.com/ericflores108/spotify/config"
+	"github.com/invopop/jsonschema"
+)
 
 func GenerateSchema[T any]() interface{} {
 	// Structured Outputs uses a subset of JSON schema
@@ -15,4 +18,4 @@ func GenerateSchema[T any]() interface{} {
 }
 
 // Generate the JSON schema at initialization time
-var SampleTrackResponseSchema = GenerateSchema[SampledTrack]()
+var SampleTrackResponseSchema = GenerateSchema[config.SampledTrack]()
