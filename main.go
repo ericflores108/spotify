@@ -27,21 +27,21 @@ func main() {
 	defer appConfig.SecretManagerClient.Close()
 	defer appConfig.FirestoreClient.Close()
 
-	// Define a flag for the redirect URL
-	useLocalHost := flag.Bool("useLocalHost", false, "Use localhost as the redirect URL (default: production URL)")
+	// Define a flag for the URL
+	useLocalHost := flag.Bool("useLocalHost", false, "Use localhost as the URL (default: production URL)")
 	flag.Parse()
 
-	// Determine the redirect URL
-	redirectURL := config.ProductionURL
+	// Determine the URL
+	titledURL := config.ProductionURL
 	if *useLocalHost {
-		redirectURL = config.DevURL
+		titledURL = config.DevURL
 	}
 
 	// Initialize the service
 	svc := service.NewService(
 		appConfig.ClientID,
 		appConfig.ClientSecret,
-		redirectURL,
+		titledURL,
 		"spotify_auth_state",
 		appConfig.FirestoreClient,
 		appConfig.OpenAIClient,
