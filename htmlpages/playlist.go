@@ -50,6 +50,22 @@ const Playlist = `
 				background-color: #ffffff;
 				text-align: center;
 			}
+			.container .yellow {
+				background-color: #FFFF00;
+				border: 2px solid #000000;
+				border-radius: 5px;
+				padding: 15px;
+				text-align: center;
+				box-sizing: border-box;
+			}
+			.container .yellow-box a {
+				color: #000000;
+				text-decoration: none;
+				font-weight: bold;
+			}
+			.container .yellow-box a:hover {
+				text-decoration: underline;
+			}
 			a {
 				color: #ffffff;
 				text-decoration: none;
@@ -88,6 +104,9 @@ const Playlist = `
 				iframe {
 					height: 280px;
 				}
+				.container .yellow {
+					padding: 10px;
+				}
 			}
 		</style>
 	</head>
@@ -99,6 +118,9 @@ const Playlist = `
 			</div>
 			<div class="white">
 				<iframe src="https://open.spotify.com/embed/playlist/%s?utm_source=generator" frameborder="0" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+			</div>
+			<div class="yellow">
+				<a href="/">Go Back to Home</a>
 			</div>
 		</div>
 	</body>
