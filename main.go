@@ -32,9 +32,9 @@ func main() {
 	flag.Parse()
 
 	// Determine the redirect URL
-	redirectURL := "https://titled96.com/callback" // Default production URL
+	redirectURL := config.ProductionURL
 	if *useLocalHost {
-		redirectURL = "http://localhost:8080/callback"
+		redirectURL = config.DevURL
 	}
 
 	// Initialize the service
