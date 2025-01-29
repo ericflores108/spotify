@@ -67,13 +67,6 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	me, err := spotifyClient.GetUser()
-	if err != nil {
-		logger.LogError("Failed to get Spotify user: %v", err)
-		http.Error(w, "Failed to get Spotify user", http.StatusInternalServerError)
-		return
-	}
-
 	ai := &ai.AIClient{
 		Client: s.AI,
 	}
@@ -194,7 +187,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		Public:      true,
 	}
 
-	userPlaylist, err := spotifyClient.CreatePlaylist(me.UserID, playlist)
+	userPlaylist, err := spotifyClient.CreatePlaylist(userID, playlist)
 	if err != nil {
 		logger.LogError("Failed to create playlist: %v", err)
 		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
