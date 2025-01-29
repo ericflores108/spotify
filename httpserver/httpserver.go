@@ -86,7 +86,6 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 		}
 
 		// Process the form submission
-		logger.LogInfo("User ID submitted: %s", userID)
 		logger.LogInfo("Album link submitted: %s", albumURL)
 
 		parts := strings.Split(albumURL, "/album/")
@@ -94,7 +93,6 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 			http.Error(w, "Invalid URL format", http.StatusBadRequest)
 			return
 		}
-		logger.LogDebug("Album link submitted: %s", albumURL)
 
 		s.Service.GeneratePlaylistHandler(w, s.Ctx, parts[1], userID, accessToken, r)
 	})
