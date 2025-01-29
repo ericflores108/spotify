@@ -145,7 +145,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 			}
 
 			if trackURI == "" {
-				logger.LogError("No trackURI found for - TRACK - %s - ARTIST - %s: %v", sampledTrack.Name, sampledTrack.Artist, err)
+				logger.LogDebug("No trackURI found for - TRACK - %s - ARTIST - %s: %v", sampledTrack.Name, sampledTrack.Artist, err)
 				return
 			}
 
@@ -174,10 +174,16 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		orderedResults[result.index] = result.trackURIs
 	}
 
-	// Flatten results
+	// Flatten results with uniqueness check
+	uriSet := make(map[string]struct{})
 	var trackURIs []string
 	for _, uris := range orderedResults {
-		trackURIs = append(trackURIs, uris...)
+		for _, uri := range uris {
+			if _, exists := uriSet[uri]; !exists {
+				uriSet[uri] = struct{}{}           // Mark URI as seen
+				trackURIs = append(trackURIs, uri) // Add unique URI
+			}
+		}
 	}
 
 	// Create Spotify playlist
