@@ -20,6 +20,7 @@ import (
 	"github.com/ericflores108/spotify/genius"
 	"github.com/ericflores108/spotify/htmlpages"
 	"github.com/ericflores108/spotify/logger"
+	"github.com/ericflores108/spotify/sampled"
 	"github.com/ericflores108/spotify/spotify"
 	"github.com/openai/openai-go"
 )
@@ -102,7 +103,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 			excludedTracks = append(excludedTracks, fmt.Sprintf("%s by %s", track.Name, artist))
 			mu.Unlock()
 
-			var sampledTrack *config.SampledTrack
+			var sampledTrack *sampled.SampledTrack
 
 			// Find using Genius
 			geniusSearch, err := s.GeniusClient.Search(track.Name, artist)
@@ -111,7 +112,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 				if err == nil && len(geniusTrack.Response.Song.SongRelationships) > 0 {
 					for _, relation := range geniusTrack.Response.Song.SongRelationships {
 						if relation.RelationshipType == "samples" && len(relation.Songs) > 0 {
-							sampledTrack = &config.SampledTrack{
+							sampledTrack = &sampled.SampledTrack{
 								Artist: relation.Songs[0].Artist,
 								Name:   relation.Songs[0].Title,
 							}

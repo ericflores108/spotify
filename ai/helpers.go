@@ -1,7 +1,7 @@
 package ai
 
 import (
-	"github.com/ericflores108/spotify/config"
+	"github.com/ericflores108/spotify/sampled"
 	"github.com/invopop/jsonschema"
 )
 
@@ -18,4 +18,4 @@ func GenerateSchema[T any]() interface{} {
 }
 
 // Generate the JSON schema at initialization time
-var SampleTrackResponseSchema = GenerateSchema[config.SampledTrack]()
+var SampleTrackResponseSchema = GenerateSchema[sampled.SampledTrack]()
