@@ -56,14 +56,26 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	album, err := spotifyClient.GetAlbum(albumID)
 	if err != nil {
 		logger.LogError("Failed to get album: %v", err)
-		http.Error(w, "Failed to get album", http.StatusInternalServerError)
+		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album: %v", err.Error()))
+		return
+	}
+
+	if album == nil {
+		logger.LogError("Failed to get album ID: %s", albumID)
+		htmlpages.RenderErrorPage(w, "Failed to get album.")
 		return
 	}
 
 	albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
 	if err != nil {
 		logger.LogError("Failed to get album tracks: %v", err)
-		http.Error(w, "Failed to get album tracks", http.StatusInternalServerError)
+		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album tracks: %v", err.Error()))
+		return
+	}
+
+	if albumTracks == nil {
+		logger.LogError("Failed to get album tracks for ID: %s", albumID)
+		htmlpages.RenderErrorPage(w, "Failed to get album tracks")
 		return
 	}
 
@@ -127,12 +139,12 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 			if sampledTrack == nil {
 				sampledTrack, err = ai.FindTrackSamples(ctx, track.Name, artist, excludedTracks)
 				if err != nil {
-					logger.LogError("Error occurred at sampledTrack: %v", err)
+					logger.LogError("Error occurred at AI sampledTrack: %v", err)
 					return
 				}
 
 				if sampledTrack == nil {
-					logger.LogError("No sampledTrack found for userID - %s: %v", userID, err)
+					logger.LogDebug("No AI sampledTrack found for userID - %s: %v", userID, err)
 					return
 				}
 			}
@@ -186,6 +198,11 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		}
 	}
 
+	if len(trackURIs) == 0 {
+		logger.LogError("Failed to retrieve tracks")
+		htmlpages.RenderErrorPage(w, "Failed to retrieve tracks")
+		return
+	}
 	// Create Spotify playlist
 	playlist := spotify.NewPlaylist{
 		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),
@@ -196,14 +213,14 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	userPlaylist, err := spotifyClient.CreatePlaylist(userID, playlist)
 	if err != nil {
 		logger.LogError("Failed to create playlist: %v", err)
-		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
+		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to create playlist: %v", err.Error()))
 		return
 	}
 
 	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackURIs, nil)
 	if err != nil {
 		logger.LogError("Failed to add tracks to playlist: %v", err)
-		http.Error(w, "Failed to add tracks to playlist", http.StatusInternalServerError)
+		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to add tracks to playlist: %v", err.Error()))
 		return
 	}
 
