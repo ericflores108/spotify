@@ -30,7 +30,7 @@ func (c *AuthClient) GetAlbum(albumID string) (*Album, error) {
 
 	var albumResponse Album
 	if err := json.Unmarshal(body, &albumResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, fmt.Errorf("failed to parse JSON: %w\nResponse Body: %s", err, string(body))
 	}
 
 	return &albumResponse, nil

@@ -57,7 +57,6 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	if err != nil {
 		logger.LogError("Failed to get album: %v", err)
 		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album: %v", err.Error()))
-		http.Error(w, "Failed to get album", http.StatusInternalServerError)
 		return
 	}
 
