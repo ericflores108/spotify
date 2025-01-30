@@ -60,10 +60,22 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
+	if album == nil {
+		logger.LogError("Failed to get album ID: %s", albumID)
+		htmlpages.RenderErrorPage(w, "Failed to get album.")
+		return
+	}
+
 	albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
 	if err != nil {
 		logger.LogError("Failed to get album tracks: %v", err)
 		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album tracks: %v", err.Error()))
+		return
+	}
+
+	if albumTracks == nil {
+		logger.LogError("Failed to get album tracks for ID: %s", albumID)
+		htmlpages.RenderErrorPage(w, "Failed to get album tracks")
 		return
 	}
 
@@ -186,6 +198,11 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		}
 	}
 
+	if len(trackURIs) == 0 {
+		logger.LogError("Failed to retrieve tracks")
+		htmlpages.RenderErrorPage(w, "Failed to retrieve tracks")
+		return
+	}
 	// Create Spotify playlist
 	playlist := spotify.NewPlaylist{
 		Name:        fmt.Sprintf("Titled - Inspired Songs from %s", album.Name),

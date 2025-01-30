@@ -5,11 +5,12 @@ import (
 	"net/http"
 )
 
-const error = `
+const errorTemplate = `
 <!DOCTYPE html>
 <html>
 <head>
     <title>Error - Titled</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -82,7 +83,7 @@ const error = `
 `
 
 func RenderErrorPage(w http.ResponseWriter, errorMessage string) {
-	tmpl, err := template.ParseFiles("templates/error.html")
+	tmpl, err := template.New("error").Parse(errorTemplate)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
