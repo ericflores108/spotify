@@ -13,11 +13,11 @@ type AIClient struct {
 	Client *openai.Client
 }
 
-func (ai *AIClient) FindTrackSamples(ctx context.Context, song, artist string, excludedSongs []string) (*config.SampledTrack, error) {
+func (ai *AIClient) FindTrackSamples(ctx context.Context, song, artist string) (*config.SampledTrack, error) {
 	// Formulate the question
 	question := fmt.Sprintf(`For the song '%s' by '%s': 
 	- Suggest one song and its artists that this song samples or draws inspiration from.
-	- Exclude the following songs: %s`, song, artist, excludedSongs)
+	- Exclude the artist's songs from the suggestion.`, song, artist)
 
 	// Define the schema parameter
 	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{

@@ -1,4 +1,4 @@
-package auth
+package spotify
 
 import (
 	"bytes"
@@ -12,28 +12,20 @@ import (
 	"strings"
 )
 
-// Config holds client credentials
-type Config struct {
-	ClientID     string
-	ClientSecret string
-}
-
-// TokenResponse holds the token information
 type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
 	ExpiresIn   int    `json:"expires_in"`
 }
 
-// GetSpotifyToken retrieves an access token from Spotify using client credentials
-func GetSpotifyToken(config Config) (string, error) {
-	auth := base64.StdEncoding.EncodeToString([]byte(config.ClientID + ":" + config.ClientSecret))
+func NewSpotifyClient(clientID, clientSecret string) (*AuthClient, error) {
+	auth := base64.StdEncoding.EncodeToString([]byte(clientID + ":" + clientSecret))
 	url := "https://accounts.spotify.com/api/token"
 	data := []byte(`grant_type=client_credentials`)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Basic "+auth)
@@ -42,29 +34,31 @@ func GetSpotifyToken(config Config) (string, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("error making request: %w", err)
+		return nil, fmt.Errorf("error making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("failed to retrieve access token: status " + resp.Status)
+		return nil, errors.New("failed to retrieve access token: status " + resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body) // Replaced ioutil.ReadAll with io.ReadAll
 	if err != nil {
-		return "", fmt.Errorf("error reading response: %w", err)
+		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
 	var tokenResponse TokenResponse
 	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", fmt.Errorf("error parsing JSON response: %w", err)
+		return nil, fmt.Errorf("error parsing JSON response: %w", err)
 	}
 
-	return tokenResponse.AccessToken, nil
+	return &AuthClient{
+		Client:      client,
+		AccessToken: tokenResponse.AccessToken,
+	}, nil
 }
 
-// GetUserAccessToken retrieves a new access token using a refresh token.
-func GetUserAccessToken(refreshToken, clientID, clientSecret string) (string, error) {
+func NewSpotifyUserClient(refreshToken, clientID, clientSecret string) (string, error) {
 	// Spotify token endpoint
 	tokenURL := "https://accounts.spotify.com/api/token"
 
