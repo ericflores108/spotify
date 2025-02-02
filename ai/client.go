@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ericflores108/spotify/sampled"
+	"github.com/ericflores108/spotify/config"
 	"github.com/openai/openai-go"
 )
 
 type AIClient struct {
-	Client *openai.Client
+	ExcludedSongs []string
+	Client        *openai.Client
 }
 
-func (ai *AIClient) FindTrackSamples(ctx context.Context, song, artist string, excludedSongs []string) (*sampled.SampledTrack, error) {
+func (ai *AIClient) FindTrackSamples(ctx context.Context, song, artist string) (*config.SampledTrack, error) {
 	// Formulate the question
 	question := fmt.Sprintf(`For the song '%s' by '%s': 
 	- Suggest one song and its artists that this song samples or draws inspiration from.
-	- Exclude the following songs: %s`, song, artist, excludedSongs)
+	- Exclude the following songs: %s`, song, artist, ai.ExcludedSongs)
 
 	// Define the schema parameter
 	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
@@ -46,7 +47,7 @@ func (ai *AIClient) FindTrackSamples(ctx context.Context, song, artist string, e
 	}
 
 	// Parse the response into a SampledTrack struct
-	var sampledTrack sampled.SampledTrack
+	var sampledTrack config.SampledTrack
 	err = json.Unmarshal([]byte(chat.Choices[0].Message.Content), &sampledTrack)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)

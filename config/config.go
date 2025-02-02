@@ -10,6 +10,7 @@ import (
 	"github.com/ericflores108/spotify/auth"
 	"github.com/ericflores108/spotify/genius"
 	"github.com/ericflores108/spotify/logger"
+	"github.com/ericflores108/spotify/spotify"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -21,6 +22,7 @@ type AppConfig struct {
 	FirestoreClient     *firestore.Client
 	OpenAIClient        *openai.Client
 	GeniusClient        *genius.GeniusClient
+	SpotifyClient       *spotify.AuthClient
 }
 
 var (
@@ -88,6 +90,9 @@ func GetConfig(ctx context.Context) *AppConfig {
 			log.Fatal(err)
 		}
 
+		// Initialize Client Credentials Flow https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow
+		spotifyClient, err := spotify.NewSpotifyClient(clientID, clientSecret)
+
 		// Assign to singleton instance
 		instance = &AppConfig{
 			ClientID:            clientID,
@@ -96,6 +101,7 @@ func GetConfig(ctx context.Context) *AppConfig {
 			FirestoreClient:     firestoreClient,
 			OpenAIClient:        aiClient,
 			GeniusClient:        geniusClient,
+			SpotifyClient:       spotifyClient,
 		}
 
 		logger.LogInfo("Configuration initialized successfully.")

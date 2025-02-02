@@ -11,4 +11,5 @@ const (
 	GeniusClientSecret = "genius_client_secret"
 	ProductionURL      = "https://titled96.com"
 	DevURL             = "http://localhost:8080"
+	StateKey           = "spotify_auth_state"
 )

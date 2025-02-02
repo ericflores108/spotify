@@ -1,10 +1,23 @@
 package sampled
 
-type SampledTrack struct {
-	Artist string `json:"artist" jsonschema_description:"The artist of the sampled song."`
-	Name   string `json:"name" jsonschema_description:"The name of the sampled song."`
+import "context"
+
+type SpotifyTrack struct {
+	Name   string
+	Artist string
+	URI    string
 }
 
 type Sampled interface {
-	GetSample(song, artist string) (*SampledTrack, error)
+	GetSample(ctx context.Context, song, artist string) (*SpotifyTrack, error)
+}
+
+type SampledManager struct {
+	Sources []Sampled
+}
+
+func NewSampledManager(sources ...Sampled) *SampledManager {
+	return &SampledManager{
+		Sources: sources,
+	}
 }

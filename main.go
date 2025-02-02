@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ericflores108/spotify/ai"
 	"github.com/ericflores108/spotify/config"
 	"github.com/ericflores108/spotify/httpserver"
 	"github.com/ericflores108/spotify/logger"
+	"github.com/ericflores108/spotify/sampled"
 	"github.com/ericflores108/spotify/service"
 )
 
@@ -37,20 +39,34 @@ func main() {
 		titledURL = config.DevURL
 	}
 
+	aiClient := &ai.AIClient{
+		Client: appConfig.OpenAIClient,
+	}
+	aiService := &sampled.AIService{
+		Spotify: appConfig.SpotifyClient,
+		AI:      aiClient,
+	}
+
+	geniusService := &sampled.GeniusService{
+		Spotify: appConfig.SpotifyClient,
+		Genius:  appConfig.GeniusClient,
+	}
+
+	sampledManager := sampled.NewSampledManager(geniusService, aiService)
+
 	// Initialize the service
-	svc := service.NewService(
-		appConfig.ClientID,
-		appConfig.ClientSecret,
-		titledURL,
-		"spotify_auth_state",
-		appConfig.FirestoreClient,
-		appConfig.OpenAIClient,
-		appConfig.GeniusClient,
-	)
+	svc := &service.Service{
+		SampledManager:      sampledManager,
+		Firestore:           appConfig.FirestoreClient,
+		SpotifyClientID:     appConfig.ClientID,
+		SpotifyClientSecret: appConfig.ClientSecret,
+		URL:                 titledURL,
+		StateKey:            config.StateKey,
+	}
 
 	// Initialize the server and register routes
-	srv := httpserver.NewServer(ctx, svc)
-	mux := srv.RegisterRoutes()
+	srv := httpserver.NewServer(svc)
+	mux := srv.RegisterRoutes(ctx)
 
 	// Determine port for HTTP service
 	port := os.Getenv("PORT")

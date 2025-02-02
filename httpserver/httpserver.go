@@ -14,17 +14,15 @@ import (
 
 type Server struct {
 	Service *service.Service
-	Ctx     context.Context
 }
 
-func NewServer(ctx context.Context, service *service.Service) *Server {
+func NewServer(service *service.Service) *Server {
 	return &Server{
 		Service: service,
-		Ctx:     ctx,
 	}
 }
 
-func (s *Server) RegisterRoutes() *http.ServeMux {
+func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Serve static files (e.g., favicon.ico) from the ./static directory
@@ -44,7 +42,7 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 	mux.HandleFunc("/login", s.Service.LoginHandler)
 
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.CallbackHandler(w, s.Ctx, r)
+		s.Service.CallbackHandler(w, ctx, r)
 	})
 
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +92,7 @@ func (s *Server) RegisterRoutes() *http.ServeMux {
 			return
 		}
 
-		s.Service.GeneratePlaylistHandler(w, s.Ctx, parts[1], userID, accessToken, r)
+		s.Service.GeneratePlaylistHandler(w, ctx, parts[1], userID, accessToken, r)
 	})
 
 	return mux
