@@ -9,8 +9,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"slices"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/firestore"
 	"github.com/ericflores108/spotify/config"
@@ -62,9 +62,13 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	var spotifyTracks []sampled.SpotifyTrack
+	var (
+		spotifyTracks = make([]string, len(albumTracks.Tracks.Items)*2)
+		mu            sync.Mutex
+		wg            sync.WaitGroup
+	)
 
-	for track := range slices.Values(albumTracks.Tracks.Items) {
+	for index, track := range albumTracks.Tracks.Items {
 
 		var artist string
 
@@ -74,37 +78,47 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 			logger.LogDebug("Unknown artist for track %s", track.Name)
 		}
 
-		spotifyTracks = append(spotifyTracks, sampled.SpotifyTrack{
-			Name:   track.Name,
-			Artist: artist,
-			URI:    track.URI,
-		})
+		mu.Lock()
+		spotifyTracks[index*2] = track.URI
+		mu.Unlock()
 
-		for _, source := range s.SampledManager.Sources {
-			spotifyTrack, err := source.GetSample(ctx, track.Name, artist)
-			if err != nil {
-				logger.LogError("Error getting %s by %s sample: %v", track.Name, artist, err)
-				continue
+		// this can be genius, openai, etc. order matters when set in main
+		wg.Add(1)
+		go func(index int, trackName, artist string) {
+			defer wg.Done()
+			for _, source := range s.SampledManager.Sources {
+				spotifyTrack, err := source.GetSample(ctx, track.Name, artist)
+				if err != nil {
+					logger.LogError("Error getting %s by %s sample: %v", track.Name, artist, err)
+					continue
+				}
+
+				if spotifyTrack == nil {
+					continue
+				}
+
+				mu.Lock()
+				spotifyTracks[index*2+1] = spotifyTrack.URI
+				mu.Unlock()
+
+				break
 			}
+		}(index, track.Name, artist)
+	}
 
-			if spotifyTrack == nil {
-				continue
-			}
+	wg.Wait()
 
-			spotifyTracks = append(spotifyTracks, *spotifyTrack)
-			break
+	filteredTracks := make([]string, 0, len(spotifyTracks))
+	for _, uri := range spotifyTracks {
+		if uri != "" { // Only keep valid URIs
+			filteredTracks = append(filteredTracks, uri)
 		}
 	}
 
-	if len(spotifyTracks) == 0 {
+	if len(filteredTracks) == 0 {
 		logger.LogError("Failed to retrieve tracks")
 		htmlpages.RenderErrorPage(w, "Failed to retrieve tracks")
 		return
-	}
-
-	var trackURIs []string
-	for track := range slices.Values(spotifyTracks) {
-		trackURIs = append(trackURIs, track.URI)
 	}
 
 	// Create Spotify playlist
@@ -121,7 +135,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	err = spotifyClient.AddToPlaylist(userPlaylist.ID, trackURIs, nil)
+	err = spotifyClient.AddToPlaylist(userPlaylist.ID, filteredTracks, nil)
 	if err != nil {
 		logger.LogError("Failed to add tracks to playlist: %v", err)
 		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to add tracks to playlist: %v", err.Error()))
