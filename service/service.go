@@ -108,11 +108,16 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	wg.Wait()
 
-	filteredTracks := make([]string, 0, len(spotifyTracks))
+	filteredTracksMap := make(map[string]struct{})
 	for _, uri := range spotifyTracks {
 		if uri != "" { // Only keep valid URIs
-			filteredTracks = append(filteredTracks, uri)
+			filteredTracksMap[uri] = struct{}{}
 		}
+	}
+
+	filteredTracks := make([]string, 0, len(filteredTracksMap))
+	for uri := range filteredTracksMap {
+		filteredTracks = append(filteredTracks, uri)
 	}
 
 	if len(filteredTracks) == 0 {
