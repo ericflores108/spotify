@@ -172,6 +172,8 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 
 	cookie, err := r.Cookie(s.StateKey)
 	if err != nil || cookie.Value != state {
+		logger.LogError("State mismatch error: %v", err)
+		logger.LogDebug("Expected state: %s, Received state: %s", cookie.Value, state)
 		http.Error(w, "State mismatch", http.StatusBadRequest)
 		return
 	}
@@ -186,12 +188,14 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.LogError("Failed to get tokens: %v", err)
 		http.Error(w, "Failed to get tokens", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.LogError("Failed to get tokens from Spotify.")
 		http.Error(w, "Failed to get tokens from Spotify", http.StatusUnauthorized)
 		return
 	}
