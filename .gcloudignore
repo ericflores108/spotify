@@ -10,3 +10,4 @@ vendor/
 # Exclude git history and configuration.
 .git/
 .gitignore
+cloud-sql-proxy
