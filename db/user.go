@@ -16,32 +16,6 @@ type User struct {
 	RefreshToken string `firestore:"refresh_token"`
 }
 
-func GetAllUsers(ctx context.Context, client *firestore.Client) ([]User, error) {
-	var users []User
-
-	iter := client.Collection("SpotifyUser").Documents(ctx)
-	defer iter.Stop()
-
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to iterate documents: %w", err)
-		}
-
-		var user User
-		if err := doc.DataTo(&user); err != nil {
-			return nil, fmt.Errorf("failed to map document data: %w", err)
-		}
-		user.ID = doc.Ref.ID
-		users = append(users, user)
-	}
-
-	return users, nil
-}
-
 func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (*User, error) {
 	query := client.Collection("SpotifyUser").Where("id", "==", userID).Limit(1)
 
