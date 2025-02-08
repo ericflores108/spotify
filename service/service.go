@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -49,90 +50,103 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
-	if err != nil {
-		logger.LogError("Failed to get album tracks: %v", err)
-		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album tracks: %v", err.Error()))
-		return
-	}
+	// check if album has been processed in the last week
+	playlistTracks, err := db.GetTracks(ctx, s.Firestore, albumID)
+	if playlistTracks == nil || len(playlistTracks) == 0 {
+		// find tracks
+		logger.LogDebug("Tracks not cached")
 
-	if albumTracks == nil {
-		logger.LogError("Failed to get album tracks for ID: %s", albumID)
-		htmlpages.RenderErrorPage(w, "Failed to get album tracks")
-		return
-	}
-
-	var (
-		spotifyTracks = make([]string, len(albumTracks.Tracks.Items)*2)
-		mu            sync.Mutex
-		wg            sync.WaitGroup
-	)
-
-	for index, track := range albumTracks.Tracks.Items {
-
-		var artist string
-
-		if len(track.Artists) > 0 {
-			artist = track.Artists[0].Name
-		} else {
-			logger.LogDebug("Unknown artist for track %s", track.Name)
+		albumTracks, err := spotifyClient.GetAlbumTracks(albumID)
+		if err != nil {
+			logger.LogError("Failed to get album tracks: %v", err)
+			htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to get album tracks: %v", err.Error()))
+			return
 		}
 
-		mu.Lock()
-		spotifyTracks[index*2] = track.URI
-		mu.Unlock()
+		if albumTracks == nil {
+			logger.LogError("Failed to get album tracks for ID: %s", albumID)
+			htmlpages.RenderErrorPage(w, "Failed to get album tracks")
+			return
+		}
 
-		// this can be genius, openai, etc. order matters when set in main
-		wg.Add(1)
-		go func(index int, trackName, artist string) {
-			defer wg.Done()
-			for _, source := range s.SampledManager.Sources {
-				spotifyTrack, err := source.GetSample(ctx, track.Name, artist)
-				if err != nil {
-					logger.LogError("Error getting %s by %s sample: %v", track.Name, artist, err)
-					continue
-				}
+		var (
+			spotifyTracks = make([]string, len(albumTracks.Tracks.Items)*2)
+			mu            sync.Mutex
+			wg            sync.WaitGroup
+		)
 
-				if spotifyTrack == nil {
-					continue
-				}
+		for index, track := range albumTracks.Tracks.Items {
 
-				mu.Lock()
-				spotifyTracks[index*2+1] = spotifyTrack.URI
-				mu.Unlock()
+			var artist string
 
-				break
+			if len(track.Artists) > 0 {
+				artist = track.Artists[0].Name
+			} else {
+				logger.LogDebug("Unknown artist for track %s", track.Name)
 			}
-		}(index, track.Name, artist)
-	}
 
-	wg.Wait()
+			mu.Lock()
+			spotifyTracks[index*2] = track.URI
+			mu.Unlock()
 
-	filteredTracksMap := make(map[string]bool)
-	filteredTracks := make([]string, 0, len(spotifyTracks))
+			// this can be genius, openai, etc. order matters when set in main
+			wg.Add(1)
+			go func(index int, trackName, artist string) {
+				defer wg.Done()
+				for _, source := range s.SampledManager.Sources {
+					spotifyTrack, err := source.GetSample(ctx, track.Name, artist)
+					if err != nil {
+						logger.LogError("Error getting %s by %s sample: %v", track.Name, artist, err)
+						continue
+					}
 
-	for _, uri := range spotifyTracks {
-		if uri == "" {
-			continue
+					if spotifyTrack == nil {
+						continue
+					}
+
+					mu.Lock()
+					spotifyTracks[index*2+1] = spotifyTrack.URI
+					mu.Unlock()
+
+					break
+				}
+			}(index, track.Name, artist)
 		}
 
-		// If the URI is already in the slice, remove it
-		if filteredTracksMap[uri] {
-			// Find and remove previous occurrence
-			for i, existingURI := range filteredTracks {
-				if existingURI == uri {
-					filteredTracks = append(filteredTracks[:i], filteredTracks[i+1:]...)
-					break // Remove only the first occurrence
+		wg.Wait()
+
+		filteredTracksMap := make(map[string]bool)
+		filteredPlaylist := make([]string, 0, len(spotifyTracks))
+
+		for _, uri := range spotifyTracks {
+			if uri == "" {
+				continue
+			}
+
+			// If the URI is already in the slice, remove it
+			if filteredTracksMap[uri] {
+				// Find and remove previous occurrence
+				for i, existingURI := range playlistTracks {
+					if existingURI == uri {
+						playlistTracks = slices.Delete(filteredPlaylist, i, i+1)
+						break // Remove only the first occurrence
+					}
 				}
 			}
-		}
 
-		// Append latest occurrence and mark it as seen
-		filteredTracks = append(filteredTracks, uri)
-		filteredTracksMap[uri] = true
+			// Append latest occurrence and mark it as seen
+			filteredPlaylist = append(filteredPlaylist, uri)
+			filteredTracksMap[uri] = true
+		}
+		playlistTracks = filteredPlaylist
+
+		err = db.SetTracks(ctx, s.Firestore, albumID, filteredPlaylist)
+		if err != nil {
+			logger.LogError("Failed to set tracks: %v", err)
+		}
 	}
 
-	if len(filteredTracks) == 0 {
+	if len(playlistTracks) == 0 {
 		logger.LogError("Failed to retrieve tracks")
 		htmlpages.RenderErrorPage(w, "Failed to retrieve tracks")
 		return
@@ -152,7 +166,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 		return
 	}
 
-	err = spotifyClient.AddToPlaylist(userPlaylist.ID, filteredTracks, nil)
+	err = spotifyClient.AddToPlaylist(userPlaylist.ID, playlistTracks, nil)
 	if err != nil {
 		logger.LogError("Failed to add tracks to playlist: %v", err)
 		htmlpages.RenderErrorPage(w, fmt.Sprintf("Failed to add tracks to playlist: %v", err.Error()))
