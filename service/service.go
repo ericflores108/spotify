@@ -89,8 +89,8 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 			spotifyTracks[index*2] = track.URI
 			mu.Unlock()
 
-			// this can be genius, openai, etc. order matters when set in main
 			wg.Add(1)
+			// this can be genius, openai, etc. order matters when set in main
 			go func(index int, trackName, artist string) {
 				defer wg.Done()
 				for _, source := range s.SampledManager.Sources {
@@ -105,6 +105,7 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 					}
 
 					mu.Lock()
+					// the original track will go before the sampled track
 					spotifyTracks[index*2+1] = spotifyTrack.URI
 					mu.Unlock()
 
