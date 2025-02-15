@@ -25,7 +25,7 @@ func NewServer(service *service.Service) *Server {
 func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Serve static files (e.g., favicon.ico) from the ./static directory
+	// Serve static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
 	tmpl := template.Must(template.New("index").Parse(htmlpages.Home))
@@ -39,51 +39,38 @@ func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 		}
 	})
 
+	// Authentication routes
 	mux.HandleFunc("/login", s.Service.LoginHandler)
-
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		s.Service.CallbackHandler(w, ctx, r)
 	})
 
+	// Protected routes with middleware
+	mux.Handle("/home", service.CookieConsentMiddleware(http.HandlerFunc(s.Service.HomePageHandler)))
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
-		// Ensure the request method is POST
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Parse the form data
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Failed to parse form", http.StatusBadRequest)
 			return
 		}
 
-		// Extract the userID and album name from the form
 		userID := r.FormValue("userID")
 		albumURL := r.FormValue("albumURL")
 		accessToken := r.FormValue("accessToken")
 
-		if userID == "" {
-			http.Error(w, "User ID cannot be empty", http.StatusBadRequest)
+		if userID == "" || albumURL == "" || accessToken == "" {
+			http.Error(w, "Missing required fields", http.StatusBadRequest)
 			return
 		}
 
-		// Set the logger prefix to the user ID
 		logger.InfoLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
 		logger.DebugLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
 		logger.ErrorLogger.SetPrefix(fmt.Sprintf("UserID: %s", userID))
 
-		if albumURL == "" {
-			http.Error(w, "Album link cannot be empty", http.StatusBadRequest)
-			return
-		}
-
-		if accessToken == "" {
-			http.Error(w, "Access Token cannot be empty", http.StatusBadRequest)
-			return
-		}
-
-		// Process the form submission
 		logger.LogInfo("Album link submitted: %s", albumURL)
 
 		parts := strings.Split(albumURL, "/album/")
