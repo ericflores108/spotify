@@ -45,8 +45,20 @@ func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 		s.Handler.CallbackHandler(w, ctx, r)
 	})
 
+	// Spotify route doesn't need auth. It creates a playlist only in eflorty
+	mux.HandleFunc("/spotify", func(w http.ResponseWriter, r *http.Request) {
+		s.Handler.HomePageHandler(w, ctx, r)
+	})
+
 	// Protected routes with middleware
-	mux.Handle("/home", handlers.CookieConsentMiddleware(http.HandlerFunc(s.Handler.HomePageHandler)))
+	mux.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("cookies_accepted")
+		if err != nil || cookie.Value == "false" {
+			http.Error(w, "You must accept cookies to use this site.", http.StatusForbidden)
+			return
+		}
+		s.Handler.HomePageHandler(w, ctx, r)
+	})
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
