@@ -12,4 +12,5 @@ const (
 	ProductionURL      = "https://titled96.com"
 	DevURL             = "http://localhost:8080"
 	StateKey           = "spotify_auth_state"
+	Eflorty108         = "31h2tegtv6vy7gkjsndegyk6hzgq"
 )

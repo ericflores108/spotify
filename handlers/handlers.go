@@ -311,8 +311,7 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) HomePageHandler(w http.ResponseWriter, ctx context.Context, r *http.Request) {
 	if r.URL.Path == "/spotify" {
-		eflorty := "31h2tegtv6vy7gkjsndegyk6hzgq"
-		token, err := db.GetUserByID(ctx, s.Firestore, eflorty)
+		token, err := db.GetUserByID(ctx, s.Firestore, config.Eflorty108)
 		if err != nil {
 			logger.LogError("Failed to get default user: %v", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -324,7 +323,7 @@ func (s *Service) HomePageHandler(w http.ResponseWriter, ctx context.Context, r 
 			AlbumURL    string
 			AccessToken string
 		}{
-			UserID:      eflorty,
+			UserID:      config.Eflorty108,
 			AccessToken: token,
 			AlbumURL:    "",
 		}
