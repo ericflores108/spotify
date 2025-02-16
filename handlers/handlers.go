@@ -324,14 +324,14 @@ func (s *Service) HomePageHandler(w http.ResponseWriter, r *http.Request) {
 	userIDCookie, err := r.Cookie("_id")
 	if err != nil {
 		logger.LogError("Failed to get user ID cookie: %v", err)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
 	accessTokenCookie, err := r.Cookie("spotify_token")
 	if err != nil {
 		logger.LogError("Failed to get access token cookie: %v", err)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
