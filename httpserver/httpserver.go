@@ -7,18 +7,18 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ericflores108/spotify/handlers"
 	"github.com/ericflores108/spotify/htmlpages"
 	"github.com/ericflores108/spotify/logger"
-	"github.com/ericflores108/spotify/service"
 )
 
 type Server struct {
-	Service *service.Service
+	Handler *handlers.Service
 }
 
-func NewServer(service *service.Service) *Server {
+func NewServer(handler *handlers.Service) *Server {
 	return &Server{
-		Service: service,
+		Handler: handler,
 	}
 }
 
@@ -40,13 +40,13 @@ func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 	})
 
 	// Authentication routes
-	mux.HandleFunc("/login", s.Service.LoginHandler)
+	mux.HandleFunc("/login", s.Handler.LoginHandler)
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		s.Service.CallbackHandler(w, ctx, r)
+		s.Handler.CallbackHandler(w, ctx, r)
 	})
 
 	// Protected routes with middleware
-	mux.Handle("/home", service.CookieConsentMiddleware(http.HandlerFunc(s.Service.HomePageHandler)))
+	mux.Handle("/home", handlers.CookieConsentMiddleware(http.HandlerFunc(s.Handler.HomePageHandler)))
 	mux.HandleFunc("/generatePlaylist", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -79,7 +79,7 @@ func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 			return
 		}
 
-		s.Service.GeneratePlaylistHandler(w, ctx, parts[1], userID, accessToken, r)
+		s.Handler.GeneratePlaylistHandler(w, ctx, parts[1], userID, accessToken, r)
 	})
 
 	return mux
