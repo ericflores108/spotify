@@ -1,4 +1,4 @@
-package service
+package handlers
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/ericflores108/spotify/config"
@@ -52,7 +53,11 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 
 	// check if album has been processed in the last week
 	playlistTracks, err := db.GetTracks(ctx, s.Firestore, albumID)
-	if playlistTracks == nil || len(playlistTracks) == 0 {
+	if err != nil {
+		logger.LogDebug("Error occurred at db.GetTracks(ctx, s.Firestore, albumID): %v", err)
+	}
+
+	if len(playlistTracks) == 0 {
 		// find tracks
 		logger.LogDebug("Tracks not cached")
 
@@ -180,6 +185,36 @@ func (s *Service) GeneratePlaylistHandler(w http.ResponseWriter, ctx context.Con
 	fmt.Fprintf(w, htmlpages.Playlist, userPlaylist.ExternalURLs.Spotify, userPlaylist.ID)
 }
 
+func (s *Service) exchangeCodeForToken(code string) (*spotify.TokenResponse, error) {
+	// Exchange code for tokens
+	tokenURL := "https://accounts.spotify.com/api/token"
+	data := fmt.Sprintf("grant_type=authorization_code&code=%s&redirect_uri=%s", code, s.URL+"/callback")
+	req, _ := http.NewRequest("POST", tokenURL, strings.NewReader(data))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.SpotifyClientID+":"+s.SpotifyClientSecret)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.LogError("Failed to get tokens: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.LogError("Failed to get tokens from Spotify.")
+		return nil, fmt.Errorf("failed to get tokens from Spotify")
+	}
+
+	var tokenResponse spotify.TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		logger.LogError("Failed to decode token response: %v", err)
+		return nil, err
+	}
+
+	return &tokenResponse, nil
+}
+
 func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
@@ -192,41 +227,26 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 		return
 	}
 
-	// Exchange code for tokens
-	tokenURL := "https://accounts.spotify.com/api/token"
-	data := fmt.Sprintf("grant_type=authorization_code&code=%s&redirect_uri=%s", code, s.URL+"/callback")
-	req, _ := http.NewRequest("POST", tokenURL, strings.NewReader(data))
-	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s.SpotifyClientID+":"+s.SpotifyClientSecret)))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.LogError("Failed to get tokens: %v", err)
-		http.Error(w, "Failed to get tokens", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		logger.LogError("Failed to get tokens from Spotify.")
-		http.Error(w, "Failed to get tokens from Spotify", http.StatusUnauthorized)
+	token, err := s.exchangeCodeForToken(code)
+	if err != nil || cookie.Value != state {
+		logger.LogError("s.exchangeCodeForToken(code) error: %v", err)
+		http.Error(w, "Failed to exchange code for token", http.StatusBadRequest)
 		return
 	}
 
-	var tokenResponse struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
-		logger.LogError("Failed to decode token response: %v", err)
-		http.Error(w, "Failed to decode token response", http.StatusInternalServerError)
-		return
-	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "spotify_token",
+		Value:    token.AccessToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(time.Hour - time.Minute),
+	})
 
 	spotifyClient := &spotify.AuthClient{
 		Client:      &http.Client{},
-		AccessToken: tokenResponse.AccessToken,
+		AccessToken: token.AccessToken,
 	}
 
 	spotifyUser, err := spotifyClient.GetUser()
@@ -239,8 +259,8 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	user := db.User{
 		ID:           spotifyUser.UserID,
 		DisplayName:  spotifyUser.DisplayName,
-		AccessToken:  tokenResponse.AccessToken,
-		RefreshToken: tokenResponse.RefreshToken,
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
 	}
 
 	docID, err := db.CreateUser(ctx, s.Firestore, user)
@@ -251,27 +271,28 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	}
 	logger.LogDebug("DOC ID: %s", docID)
 
-	tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
+	http.SetCookie(w, &http.Cookie{
+		Name:     "_id",
+		Value:    spotifyUser.UserID,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(time.Duration(token.ExpiresIn) * time.Second),
+	})
 
-	formData := struct {
-		UserID      string
-		AlbumURL    string
-		AccessToken string
-	}{
-		UserID:      spotifyUser.UserID,
-		AccessToken: tokenResponse.AccessToken,
-		AlbumURL:    "", // Placeholder for album name input
-	}
+	http.Redirect(w, r, "/home", http.StatusSeeOther)
+}
 
-	// Set the content type for the response
-	w.Header().Set("Content-Type", "text/html")
-
-	// Render the template
-	if err := tmpl.Execute(w, formData); err != nil {
-		logger.LogError("Failed to render template: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+func CookieConsentMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("cookies_accepted")
+		if err != nil || cookie.Value != "true" {
+			http.Error(w, "You must accept cookies to use this site.", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func generateRandomString(length int) string {
@@ -286,11 +307,50 @@ func generateRandomString(length int) string {
 func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	state := generateRandomString(16)
 	http.SetCookie(w, &http.Cookie{
-		Name:  s.StateKey,
-		Value: state,
-		Path:  "/",
+		Name:     s.StateKey,
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(10 * time.Minute), // Expire in 10 mins
 	})
 	authURL := fmt.Sprintf("https://accounts.spotify.com/authorize?response_type=code&client_id=%s&scope=%s&redirect_uri=%s&state=%s",
 		s.SpotifyClientID, config.SpotifyScope, s.URL+"/callback", state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+}
+
+func (s *Service) HomePageHandler(w http.ResponseWriter, r *http.Request) {
+	userIDCookie, err := r.Cookie("_id")
+	if err != nil {
+		logger.LogError("Failed to get user ID cookie: %v", err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	accessTokenCookie, err := r.Cookie("spotify_token")
+	if err != nil {
+		logger.LogError("Failed to get access token cookie: %v", err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	formData := struct {
+		UserID      string
+		AlbumURL    string
+		AccessToken string
+	}{
+		UserID:      userIDCookie.Value,
+		AccessToken: accessTokenCookie.Value,
+		AlbumURL:    "",
+	}
+
+	tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := tmpl.Execute(w, formData); err != nil {
+		logger.LogError("Failed to render template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }

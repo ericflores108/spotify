@@ -120,7 +120,7 @@ const Playlist = `
 				<iframe src="https://open.spotify.com/embed/playlist/%s?utm_source=generator" frameborder="0" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
 			</div>
 			<div class="yellow">
-				<a href="/">Go Back to Home</a>
+				<a href="/home">Go Back to Home</a>
 			</div>
 		</div>
 	</body>

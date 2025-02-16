@@ -1,6 +1,6 @@
 package htmlpages
 
-const Home = `
+const Login = `
 	<!doctype html>
 	<html>
 	<head>
@@ -85,6 +85,41 @@ const Home = `
 			a:hover {
 				background-color: #555555;
 			}
+
+			/* Cookie Banner */
+			.cookie-banner {
+				position: fixed;
+				bottom: 10px;
+				left: 50%;
+				transform: translateX(-50%);
+				background: #000;
+				color: #fff;
+				padding: 10px 20px;
+				border-radius: 5px;
+				font-size: 14px;
+				text-align: center;
+				z-index: 1000;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+			}
+			.cookie-banner p {
+				margin: 0;
+				font-size: 14px;
+			}
+			.cookie-banner button {
+				background: #fff;
+				color: #000;
+				border: none;
+				padding: 5px 10px;
+				cursor: pointer;
+				font-weight: bold;
+				border-radius: 5px;
+			}
+			.cookie-banner button:hover {
+				background: #ccc;
+			}
+
 			/* Responsive Design */
 			@media (max-width: 480px) {
 				body {
@@ -105,6 +140,11 @@ const Home = `
 					padding: 8px 15px;
 					font-size: 14px;
 				}
+				.cookie-banner {
+					flex-direction: column;
+					text-align: center;
+					padding: 15px;
+				}
 			}
 		</style>
 	</head>
@@ -121,12 +161,41 @@ const Home = `
 				<h3>How It Works</h3>
 				<p>For each song in the selected album, we analyze its inspirations and influences:</p>
 				<ul>
-					<li>Any songs it samples</li>
-					<li>General inspirations or influences behind its creation</li>
+					<li>
+							Any songs it samples. ie,
+							<ul>
+									<li><i>Song:</i> Squabble Up by Kendrick Lamar</li>
+									<li><i>Sampled Song:</i> When I Hear Music by Debbie Deb</li>
+							</ul>
+					</li>
+					<li>If no sampled song, we analyze general inspirations or influences behind its creation</li>
 					<li>Based on the analysis, you'll see a generated playlist in your Spotify app.</li>
 					<li>Each playlist generated will have the prefix, "Titled - Inspired Songs from [album]"</li>
 				</ul>
 			</div>
 		</div>
+
+		<!-- Cookie Consent Banner -->
+		<div id="cookie-banner" class="cookie-banner">
+			<p>This site uses necessary cookies for authentication and session management.</p>
+			<button id="accept-cookies">Accept</button>
+			<button id="reject-cookies">Reject</button>
+		</div>
+
+		<script>
+			document.getElementById("accept-cookies").addEventListener("click", function() {
+				document.cookie = "cookies_accepted=true; path=/; max-age=" + (60*60*24*365) + "; Secure; SameSite=Lax";
+				document.getElementById("cookie-banner").style.display = "none";
+			});
+
+			document.getElementById("reject-cookies").addEventListener("click", function() {
+				document.cookie = "cookies_rejected=true; path=/; max-age=" + (60*60*24*365) + "; Secure; SameSite=Lax";
+				document.getElementById("cookie-banner").style.display = "none";
+			});
+
+			if (document.cookie.includes("cookies_accepted=true") || document.cookie.includes("cookies_rejected=true")) {
+				document.getElementById("cookie-banner").style.display = "none";
+			}
+		</script>
 	</body>
 	</html>`

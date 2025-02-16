@@ -9,10 +9,10 @@ import (
 
 	"github.com/ericflores108/spotify/ai"
 	"github.com/ericflores108/spotify/config"
+	"github.com/ericflores108/spotify/handlers"
 	"github.com/ericflores108/spotify/httpserver"
 	"github.com/ericflores108/spotify/logger"
 	"github.com/ericflores108/spotify/sampled"
-	"github.com/ericflores108/spotify/service"
 )
 
 func main() {
@@ -54,8 +54,7 @@ func main() {
 
 	sampledManager := sampled.NewSampledManager(geniusService, aiService)
 
-	// Initialize the service
-	svc := &service.Service{
+	svc := &handlers.Service{
 		SampledManager:      sampledManager,
 		Firestore:           appConfig.FirestoreClient,
 		SpotifyClientID:     appConfig.ClientID,
