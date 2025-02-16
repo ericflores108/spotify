@@ -50,7 +50,7 @@ func CreateUser(ctx context.Context, client *firestore.Client, user User) (strin
 	return docRef.ID, nil
 }
 
-func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (*User, error) {
+func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (string, error) {
 	query := client.Collection("SpotifyUser").Where("id", "==", userID).Limit(1)
 
 	iter := query.Documents(ctx)
@@ -59,16 +59,15 @@ func GetUserByID(ctx context.Context, client *firestore.Client, userID string) (
 	doc, err := iter.Next()
 	if err != nil {
 		if err == iterator.Done {
-			return nil, fmt.Errorf("user with ID %s not found", userID)
+			return "", fmt.Errorf("user with ID %s not found", userID)
 		}
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return "", fmt.Errorf("failed to execute query: %w", err)
 	}
 
 	var user User
 	if err := doc.DataTo(&user); err != nil {
-		return nil, fmt.Errorf("failed to map document data: %w", err)
+		return "", fmt.Errorf("failed to map document data: %w", err)
 	}
-	user.ID = doc.Ref.ID
 
-	return &user, nil
+	return user.AccessToken, nil
 }
