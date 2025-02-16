@@ -161,8 +161,14 @@ const Login = `
 				<h3>How It Works</h3>
 				<p>For each song in the selected album, we analyze its inspirations and influences:</p>
 				<ul>
-					<li>Any songs it samples</li>
-					<li>General inspirations or influences behind its creation</li>
+					<li>
+							Any songs it samples. ie,
+							<ul>
+									<li><i>Song:</i> Squabble Up by Kendrick Lamar</li>
+									<li><i>Sampled Song:</i> When I Hear Music by Debbie Deb</li>
+							</ul>
+					</li>
+					<li>If no sampled song, we analyze general inspirations or influences behind its creation</li>
 					<li>Based on the analysis, you'll see a generated playlist in your Spotify app.</li>
 					<li>Each playlist generated will have the prefix, "Titled - Inspired Songs from [album]"</li>
 				</ul>
