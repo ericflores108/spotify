@@ -287,7 +287,7 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 func CookieConsentMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("cookies_accepted")
-		if err != nil || cookie.Value != "true" {
+		if err != nil || cookie.Value == "false" {
 			http.Error(w, "You must accept cookies to use this site.", http.StatusForbidden)
 			return
 		}

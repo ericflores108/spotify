@@ -183,6 +183,11 @@ const Login = `
 		</div>
 
 		<script>
+			// Initialize cookie to "cookies_accepted=null" if no cookie preference exists
+			if (!document.cookie.includes("cookies_accepted") && !document.cookie.includes("cookies_rejected")) {
+				document.cookie = "cookies_accepted=null; path=/; max-age=" + (60*60*24*365) + "; Secure; SameSite=Lax";
+			}
+
 			document.getElementById("accept-cookies").addEventListener("click", function() {
 				document.cookie = "cookies_accepted=true; path=/; max-age=" + (60*60*24*365) + "; Secure; SameSite=Lax";
 				document.getElementById("cookie-banner").style.display = "none";
