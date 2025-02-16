@@ -101,17 +101,14 @@ func NewSpotifyUserClient(refreshToken, clientID, clientSecret string) (string, 
 	}
 
 	// Parse the access token from the response
-	type tokenResponse struct {
-		AccessToken string `json:"access_token"`
-	}
-	var tr tokenResponse
-	if err := json.Unmarshal(body, &tr); err != nil {
+	var token TokenResponse
+	if err := json.Unmarshal(body, &token); err != nil {
 		return "", fmt.Errorf("failed to parse token response: %w", err)
 	}
 
-	if tr.AccessToken == "" {
+	if token.AccessToken == "" {
 		return "", errors.New("access token not found in response")
 	}
 
-	return tr.AccessToken, nil
+	return token.AccessToken, nil
 }

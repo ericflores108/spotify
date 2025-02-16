@@ -284,17 +284,6 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	http.Redirect(w, r, "/home", http.StatusSeeOther)
 }
 
-func CookieConsentMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("cookies_accepted")
-		if err != nil || cookie.Value != "true" {
-			http.Error(w, "You must accept cookies to use this site.", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 func generateRandomString(length int) string {
 	b := make([]byte, length)
 	_, err := rand.Read(b)
@@ -320,37 +309,65 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
-func (s *Service) HomePageHandler(w http.ResponseWriter, r *http.Request) {
-	userIDCookie, err := r.Cookie("_id")
-	if err != nil {
-		logger.LogError("Failed to get user ID cookie: %v", err)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
+func (s *Service) HomePageHandler(w http.ResponseWriter, ctx context.Context, r *http.Request) {
+	if r.URL.Path == "/spotify" {
+		token, err := db.GetUserByID(ctx, s.Firestore, config.Eflorty108)
+		if err != nil {
+			logger.LogError("Failed to get default user: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 
-	accessTokenCookie, err := r.Cookie("spotify_token")
-	if err != nil {
-		logger.LogError("Failed to get access token cookie: %v", err)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
+		formData := struct {
+			UserID      string
+			AlbumURL    string
+			AccessToken string
+		}{
+			UserID:      config.Eflorty108,
+			AccessToken: token,
+			AlbumURL:    "",
+		}
 
-	formData := struct {
-		UserID      string
-		AlbumURL    string
-		AccessToken string
-	}{
-		UserID:      userIDCookie.Value,
-		AccessToken: accessTokenCookie.Value,
-		AlbumURL:    "",
-	}
+		tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
 
-	tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
+		w.Header().Set("Content-Type", "text/html")
+		if err := tmpl.Execute(w, formData); err != nil {
+			logger.LogError("Failed to render template: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		userIDCookie, err := r.Cookie("_id")
+		if err != nil {
+			logger.LogError("Failed to get user ID cookie: %v", err)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
 
-	w.Header().Set("Content-Type", "text/html")
-	if err := tmpl.Execute(w, formData); err != nil {
-		logger.LogError("Failed to render template: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+		accessTokenCookie, err := r.Cookie("spotify_token")
+		if err != nil {
+			logger.LogError("Failed to get access token cookie: %v", err)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		formData := struct {
+			UserID      string
+			AlbumURL    string
+			AccessToken string
+		}{
+			UserID:      userIDCookie.Value,
+			AccessToken: accessTokenCookie.Value,
+			AlbumURL:    "",
+		}
+
+		tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
+
+		w.Header().Set("Content-Type", "text/html")
+		if err := tmpl.Execute(w, formData); err != nil {
+			logger.LogError("Failed to render template: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
