@@ -92,6 +92,10 @@ func GetConfig(ctx context.Context) *AppConfig {
 
 		// Initialize Client Credentials Flow https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow
 		spotifyClient, err := spotify.NewSpotifyClient(clientID, clientSecret)
+		if err != nil {
+			logger.LogError("failed to create Spotify client: %v", err)
+			log.Fatal(err)
+		}
 
 		// Assign to singleton instance
 		instance = &AppConfig{
