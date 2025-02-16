@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"slices"
@@ -271,8 +272,8 @@ func (s *Service) CallbackHandler(w http.ResponseWriter, ctx context.Context, r 
 	logger.LogDebug("DOC ID: %s", docID)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "spotify_token",
-		Value:    token.AccessToken,
+		Name:     "_id",
+		Value:    spotifyUser.UserID,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
@@ -320,5 +321,36 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) HomePageHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Welcome to your home page!")
+	userIDCookie, err := r.Cookie("_id")
+	if err != nil {
+		logger.LogError("Failed to get user ID cookie: %v", err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	accessTokenCookie, err := r.Cookie("spotify_token")
+	if err != nil {
+		logger.LogError("Failed to get access token cookie: %v", err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	formData := struct {
+		UserID      string
+		AlbumURL    string
+		AccessToken string
+	}{
+		UserID:      userIDCookie.Value,
+		AccessToken: accessTokenCookie.Value,
+		AlbumURL:    "",
+	}
+
+	tmpl := template.Must(template.New("form").Parse(htmlpages.GeneratePlaylist))
+
+	w.Header().Set("Content-Type", "text/html")
+	if err := tmpl.Execute(w, formData); err != nil {
+		logger.LogError("Failed to render template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }

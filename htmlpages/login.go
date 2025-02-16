@@ -1,6 +1,6 @@
 package htmlpages
 
-const Home = `
+const Login = `
 	<!doctype html>
 	<html>
 	<head>

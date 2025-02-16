@@ -28,7 +28,7 @@ func (s *Server) RegisterRoutes(ctx context.Context) *http.ServeMux {
 	// Serve static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
-	tmpl := template.Must(template.New("index").Parse(htmlpages.Home))
+	tmpl := template.Must(template.New("index").Parse(htmlpages.Login))
 
 	// Serve the root page with the template
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
