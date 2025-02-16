@@ -81,6 +81,10 @@ const GeneratePlaylist = `
         button:hover {
             background-color: #555555;
         }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         @media (max-width: 480px) {
             body {
                 padding: 5px;
@@ -112,18 +116,41 @@ const GeneratePlaylist = `
                 return false;
             }
 
-            showLoading(event); // Call showLoading if validation passes
-            return true;
-        }
-
-        function showLoading(event) {
-            // Show the blue box and loading message
-            document.querySelector('.blue').style.display = 'block';
-
-            // Allow form submission after the loading message is displayed
+            showLoading(); // Show loading indicator
             setTimeout(() => {
                 event.target.submit();
             }, 50);
+
+            return true;
+        }
+
+        function showLoading() {
+            document.querySelector('.blue').style.display = 'block';
+        }
+
+        function addRandomAlbum() {
+            const albumInput = document.getElementById('albumURL');
+            const albums = [
+                "https://open.spotify.com/album/0hvT3yIEysuuvkK73vgdcW?si=ylvwdhfcRP6svCwsbRQcVw",
+                "https://open.spotify.com/album/4h3I43cFQyDqezGcREnTK6?si=UIG_5i22SuuV29GdK5lyNQ"
+            ];
+            albumInput.value = albums[Math.floor(Math.random() * albums.length)];
+            document.getElementById("generateBtn").disabled = false;
+        }
+
+        function generateFromRandomAlbum(event) {
+            event.preventDefault(); // Prevent default behavior
+            addRandomAlbum();
+            showLoading(); // Show loading message
+            setTimeout(() => {
+                document.getElementById("playlistForm").submit();
+            }, 50);
+        }
+
+        function toggleGenerateButton() {
+            const albumInput = document.getElementById('albumURL');
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = albumInput.value.trim() === "";
         }
     </script>
 </head>
@@ -133,14 +160,15 @@ const GeneratePlaylist = `
             <h1>Generate Spotify Playlist</h1>
         </div>
         <div class="yellow">
-            <form action="/generatePlaylist" method="post" onsubmit="return validateInput(event)">
+            <form id="playlistForm" action="/generatePlaylist" method="post" onsubmit="return validateInput(event)">
                 <input type="hidden" id="userID" name="userID" value="{{.UserID}}">
                 <input type="hidden" id="accessToken" name="accessToken" value="{{.AccessToken}}">
                 
                 <label for="albumURL">Insert Spotify Album Link:</label>
-                <input type="text" id="albumURL" name="albumURL" value="{{.AlbumURL}}" required>
+                <input type="text" id="albumURL" name="albumURL" value="{{.AlbumURL}}" required oninput="toggleGenerateButton()">
 
-                <button type="submit">Generate</button>
+                <button id="generateBtn" type="submit" disabled>Generate</button>
+                <button type="button" onclick="generateFromRandomAlbum(event)">Generate from Random Album</button>
             </form>
         </div>
         <div class="blue">
