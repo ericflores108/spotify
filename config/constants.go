@@ -6,7 +6,7 @@ const (
 	SpotifySecretID    = "spotify_client_secret"
 	BigQueryDataset    = "spotify-440505"
 	OpenAIApiKeyID     = "openai_api_key"
-	SpotifyScope       = "user-top-read user-read-private user-read-email playlist-modify-private playlist-modify-public playlist-read-private playlist-read-collaborative"
+	SpotifyScope       = "user-read-private user-read-email playlist-modify-public"
 	GeniusClientID     = "genius_client_id"
 	GeniusClientSecret = "genius_client_secret"
 	ProductionURL      = "https://titled96.com"
